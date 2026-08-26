@@ -14,6 +14,13 @@ permissions:
   contents: write
   packages: write
 
+# Never run two releases for the same tag: a repeated trigger (e.g. tag
+# push racing a manual dispatch) cancels the earlier run so goreleaser
+# does not fail uploading assets that already exist.
+concurrency:
+  group: release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   release:
     name: Release
@@ -29,6 +36,18 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Check release does not exist yet
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          tag="${RELEASE_TAG:-${GITHUB_REF_NAME}}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; skipping."
+            exit 0
+          fi
+          echo "Release $tag does not exist; proceeding."
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
