@@ -43,7 +43,14 @@ const (
 	iterations    = 100000
 )
 
+// testOverridePath, when non-empty, redirects the secrets file location so
+// tests never touch a real user config.
+var testOverridePath string
+
 func getEncryptedPath() (string, error) {
+	if testOverridePath != "" {
+		return testOverridePath, nil
+	}
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err

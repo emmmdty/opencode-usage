@@ -1,14 +1,25 @@
 package auth
 
 import (
-	"os"
+	"path/filepath"
+	"sync"
 	"testing"
 )
 
 func TestKeyringOperations(t *testing.T) {
-	if !IsKeyringAvailable() && os.Getenv("OPENCODE_USAGE_MASTER_PASSWORD") == "" {
-		t.Skip("skipping: no keyring and no OPENCODE_USAGE_MASTER_PASSWORD set")
-	}
+	// StoreAPIKey/GetAPIKey/DeleteAPIKey are exercised through the encrypted
+	// file fallback with an explicit master password, which is deterministic
+	// everywhere (an interactive system keyring is not available in CI and
+	// would hang the test).
+	t.Setenv("OPENCODE_USAGE_MASTER_PASSWORD", "ci-test-master-password")
+	setTestSecretsPath(t)
+	resetMasterPasswordCache()
+
+	// Force the encrypted file backend so the test never touches a real
+	// system keyring (macOS Keychain / Windows Credential Manager).
+	origRing := ring
+	ring = nil
+	defer func() { ring = origRing }()
 
 	serviceName := "opencode-usage-test"
 	accountName := "test-account"
@@ -35,6 +46,25 @@ func TestKeyringOperations(t *testing.T) {
 	if err == nil {
 		t.Error("expected error after deletion")
 	}
+}
+
+// setTestSecretsPath redirects the secrets file to a temp dir and cleans up.
+func setTestSecretsPath(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "secrets.enc")
+	testOverridePath = path
+	t.Cleanup(func() { testOverridePath = "" })
+}
+
+// resetMasterPasswordCache clears the cached master password so tests can
+// switch between default and explicit master password modes.
+func resetMasterPasswordCache() {
+	passwordMu.Lock()
+	cachedMasterPassword = ""
+	passwordErr = nil
+	passwordOnce = sync.Once{}
+	passwordMu.Unlock()
 }
 
 func TestExtractKeyID(t *testing.T) {

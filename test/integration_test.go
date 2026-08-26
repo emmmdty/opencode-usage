@@ -3,12 +3,16 @@ package test
 import (
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestCLIIntegration(t *testing.T) {
 	binary := filepath.Join(t.TempDir(), "opencode-usage-test")
+	if runtime.GOOS == "windows" {
+		binary += ".exe"
+	}
 	buildCmd := exec.Command("go", "build", "-o", binary, "../cmd/opencode-usage/")
 	if err := buildCmd.Run(); err != nil {
 		t.Fatalf("failed to build binary: %v", err)

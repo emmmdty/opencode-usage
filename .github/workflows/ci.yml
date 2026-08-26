@@ -45,6 +45,8 @@ jobs:
         run: go build -v ./...
 
       - name: Test
+        env:
+          OPENCODE_USAGE_MASTER_PASSWORD: ci-test-master-password
         run: go test -v -race -count=1 ./...
 
   build-matrix:

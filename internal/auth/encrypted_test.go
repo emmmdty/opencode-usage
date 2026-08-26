@@ -158,15 +158,12 @@ func TestStoreAndGetEncrypted(t *testing.T) {
 		t.Skip("OPENCODE_USAGE_MASTER_PASSWORD not set")
 	}
 
+	// Use an isolated temp path so the real user config is never touched.
+	setTestSecretsPath(t)
+	resetMasterPasswordCache()
+
 	account := "test-account-encrypted"
 	apiKey := "sk-test-encrypted-123456"
-
-	// Clean up any existing test data
-	path, _ := getEncryptedPath()
-	if _, err := os.Stat(path); err == nil {
-		os.Remove(path)
-	}
-	defer os.Remove(path)
 
 	// Store
 	if err := storeEncrypted(account, apiKey); err != nil {
