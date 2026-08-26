@@ -19,13 +19,13 @@ OpenCode Go plan usage query tool — query usage, available models, and quota i
 ### Go install
 
 ```bash
-go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@v0.2.2
+go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@v0.2.4
 ```
 
 Requires Go 1.26.6+. If `~/go/bin` is not in your PATH, use:
 
 ```bash
-GOBIN=~/.local/bin go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@v0.2.2
+GOBIN=~/.local/bin go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@v0.2.4
 ```
 
 ### Download binary
