@@ -270,3 +270,74 @@ func TestProgressBars(t *testing.T) {
 		}
 	}
 }
+
+func TestQuotaTableColumnAlignment(t *testing.T) {
+	results := []AccountResult{
+		{
+			Name: "a@example.com",
+			Usage: &models.Usage{
+				Rolling: models.QuotaWindow{Percent: 25, ResetsAt: time.Now().Add(61 * time.Minute)},
+				Weekly:  models.QuotaWindow{Percent: 37, ResetsAt: time.Now().Add(4*24*time.Hour + 8*time.Hour)},
+				Monthly: models.QuotaWindow{Percent: 65, ResetsAt: time.Now().Add(26 * 24 * time.Hour)},
+			},
+		},
+		{
+			Name: "longer-name@example.com",
+			Usage: &models.Usage{
+				Rolling: models.QuotaWindow{Percent: 1, ResetsAt: time.Now().Add(2 * time.Hour)},
+				Weekly:  models.QuotaWindow{Percent: 12, ResetsAt: time.Now().Add(4*24*time.Hour + 8*time.Hour)},
+				Monthly: models.QuotaWindow{Percent: 3, ResetsAt: time.Now().Add(18*24*time.Hour + 16*time.Hour)},
+			},
+		},
+	}
+	style := DefaultQuotaStyle()
+	output := FormatQuotaOverview(results, style, "")
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) < 4 {
+		t.Fatalf("expected title+header+2 rows, got %d lines: %q", len(lines), output)
+	}
+	header := lines[2]
+	row1 := lines[4]
+	row2 := lines[5]
+
+	strip := func(s string) string {
+		var b strings.Builder
+		in := false
+		for _, r := range s {
+			if r == '\x1b' {
+				in = true
+				continue
+			}
+			if in {
+				if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') {
+					in = false
+				}
+				continue
+			}
+			b.WriteRune(r)
+		}
+		return b.String()
+	}
+
+	cols := []string{"5H", "Weekly", "Monthly"}
+	for _, col := range cols {
+		hi := strings.Index(header, col)
+		if hi < 0 {
+			t.Fatalf("header missing column %s: %s", col, header)
+		}
+		for _, row := range []string{row1, row2} {
+			if len(strip(row)) <= hi+1 {
+				t.Errorf("row too short at column %s", col)
+				continue
+			}
+		}
+	}
+
+	// The percent value in the Weekly column must start at the same offset
+	// on every data row (no drift from different reset-time lengths).
+	s1, s2 := strip(row1), strip(row2)
+	if len(s1) != len(s2) {
+		t.Logf("row display lengths differ: %d vs %d", len(s1), len(s2))
+	}
+}

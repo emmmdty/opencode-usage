@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/emmmdty/opencode-usage/internal/models"
 	"github.com/mattn/go-runewidth"
 )
@@ -68,18 +69,24 @@ func formatTable(results []AccountResult, style QuotaStyle, theme Theme, width i
 		colWidth = 8
 	}
 
-	barWidth := colWidth - 12
+	// cell = bar + " " + pct("%3d%%"=4) + " " + reset(7 fixed)
+	// so barWidth = colWidth - (1+4+1+7) = colWidth - 13
+	barWidth := colWidth - 13
 	if barWidth < 0 {
 		barWidth = 0
 	}
 
 	b.WriteString(theme.Title.Render("  OpenCode Go  ") + theme.Muted.Render(fmt.Sprintf("refreshed %s", time.Now().Format("15:04:05"))) + "\n\n")
 
-	header := fmt.Sprintf("  %-*s  %-*s  %-*s  %-*s\n",
-		nameWidth, theme.Header.Render("ACCOUNT"),
-		colWidth, theme.Header.Render("5H"),
-		colWidth, theme.Header.Render("Weekly"),
-		colWidth, theme.Header.Render("Monthly"))
+	header := "  " +
+		lipgloss.PlaceHorizontal(nameWidth, lipgloss.Left, theme.Header.Render("ACCOUNT")) +
+		"  " +
+		lipgloss.PlaceHorizontal(colWidth, lipgloss.Left, theme.Header.Render("5H")) +
+		"  " +
+		lipgloss.PlaceHorizontal(colWidth, lipgloss.Left, theme.Header.Render("Weekly")) +
+		"  " +
+		lipgloss.PlaceHorizontal(colWidth, lipgloss.Left, theme.Header.Render("Monthly")) +
+		"\n"
 	b.WriteString(header)
 	sepLen := nameWidth + 3*colWidth + 10
 	if sepLen > usable {
@@ -198,23 +205,31 @@ func formatQuotaRow(result AccountResult, nameWidth, colWidth, barWidth int, sty
 		marker = theme.Active.Render("→ ")
 	}
 
-	name := padRight(result.Name, nameWidth)
+	name := theme.Account.Render(padRight(result.Name, nameWidth))
 	rolling := formatQuotaCell(result.Usage.Rolling.Percent, result.Usage.Rolling.ResetsAt, barWidth, style, theme)
 	weekly := formatQuotaCell(result.Usage.Weekly.Percent, result.Usage.Weekly.ResetsAt, barWidth, style, theme)
 	monthly := formatQuotaCell(result.Usage.Monthly.Percent, result.Usage.Monthly.ResetsAt, barWidth, style, theme)
 
-	return fmt.Sprintf("  %s%s  %-*s  %-*s  %-*s\n",
-		marker, theme.Account.Render(name),
-		colWidth, rolling,
-		colWidth, weekly,
-		colWidth, monthly)
+	return "  " + marker + name + "  " +
+		lipgloss.PlaceHorizontal(colWidth, lipgloss.Left, rolling) +
+		"  " +
+		lipgloss.PlaceHorizontal(colWidth, lipgloss.Left, weekly) +
+		"  " +
+		lipgloss.PlaceHorizontal(colWidth, lipgloss.Left, monthly) +
+		"\n"
 }
 
 func formatQuotaCell(percent int, resetsAt time.Time, barWidth int, style QuotaStyle, theme Theme) string {
 	bar := renderBar(percent, barWidth, style, theme)
 	pct := formatPercent(percent, style, theme)
-	reset := theme.Muted.Render(" " + formatResetTime(resetsAt))
+	reset := theme.Muted.Render(" " + formatResetTimeFixed(resetsAt))
 	return bar + " " + pct + reset
+}
+
+// formatResetTimeFixed returns the reset time padded to a fixed display
+// width so pct columns stay aligned across rows.
+func formatResetTimeFixed(resetsAt time.Time) string {
+	return padRight(formatResetTime(resetsAt), 7)
 }
 
 func renderBar(percent, width int, style QuotaStyle, theme Theme) string {
