@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -132,16 +133,30 @@ var updateCmd = &cobra.Command{
 	},
 }
 
+func getGitHubToken() string {
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		return token
+	}
+	// Try to get token from gh CLI
+	out, err := exec.Command("gh", "auth", "token").Output()
+	if err == nil {
+		return strings.TrimSpace(string(out))
+	}
+	return ""
+}
+
 func getLatestRelease() (*githubRelease, error) {
 	client := &http.Client{Timeout: 15 * time.Second}
+	token := getGitHubToken()
+
+	// Try releases/latest first
 	req, err := http.NewRequest("GET", "https://api.github.com/repos/emmmdty/opencode-usage/releases/latest", nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("User-Agent", "opencode-usage/"+version.Version)
-
-	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
@@ -154,15 +169,48 @@ func getLatestRelease() (*githubRelease, error) {
 	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
 		return nil, fmt.Errorf("GitHub API rate limited (set GITHUB_TOKEN to increase limits)")
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+
+	if resp.StatusCode == http.StatusOK {
+		var release githubRelease
+		if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+			return nil, err
+		}
+		return &release, nil
 	}
 
-	var release githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	// Fallback: list tags and find latest
+	req2, err := http.NewRequest("GET", "https://api.github.com/repos/emmmdty/opencode-usage/tags?per_page=10", nil)
+	if err != nil {
 		return nil, err
 	}
-	return &release, nil
+	req2.Header.Set("Accept", "application/vnd.github.v3+json")
+	req2.Header.Set("User-Agent", "opencode-usage/"+version.Version)
+	if token != "" {
+		req2.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp2, err := client.Do(req2)
+	if err != nil {
+		return nil, err
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status %d", resp2.StatusCode)
+	}
+
+	var tags []struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(resp2.Body).Decode(&tags); err != nil {
+		return nil, err
+	}
+
+	if len(tags) == 0 {
+		return nil, fmt.Errorf("no releases or tags found")
+	}
+
+	return &githubRelease{TagName: tags[0].Name}, nil
 }
 
 func getBinaryURL(release *githubRelease) (string, error) {
