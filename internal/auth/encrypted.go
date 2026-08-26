@@ -81,23 +81,36 @@ func doInitMasterPassword() {
 
 func getMasterPassword() (string, error) {
 	passwordMu.RLock()
-	if cachedMasterPassword != "" {
-		pwd := cachedMasterPassword
-		passwordMu.RUnlock()
-		return pwd, nil
-	}
+	cached := cachedMasterPassword
+	err := passwordErr
 	passwordMu.RUnlock()
-
-	if useMasterPassword != nil && !*useMasterPassword {
-		passwordMu.Lock()
-		cachedMasterPassword = defaultPassword
-		pwd := cachedMasterPassword
-		passwordMu.Unlock()
-		return pwd, nil
+	if cached != "" {
+		return cached, nil
+	}
+	if err != nil {
+		return "", err
 	}
 
-	passwordOnce.Do(doInitMasterPassword)
-	return cachedMasterPassword, passwordErr
+	passwordMu.Lock()
+	if cachedMasterPassword == "" && passwordErr == nil {
+		passwordMu.Unlock()
+
+		if useMasterPassword != nil && !*useMasterPassword {
+			passwordMu.Lock()
+			cachedMasterPassword = defaultPassword
+			cached := cachedMasterPassword
+			passwordMu.Unlock()
+			return cached, nil
+		}
+
+		passwordOnce.Do(doInitMasterPassword)
+	}
+
+	passwordMu.RLock()
+	cached = cachedMasterPassword
+	err = passwordErr
+	passwordMu.RUnlock()
+	return cached, err
 }
 
 func deriveKey(password string, salt []byte) []byte {
@@ -171,15 +184,85 @@ func decrypt(data []byte, password string) ([]byte, error) {
 	return aesGCM.Open(nil, nonce, ciphertext, nil)
 }
 
-func storeEncrypted(account, apiKey string) error {
+// parseSecrets parses the secrets blob. Two formats exist:
+//   - legacy: "account:key\n" per line
+//   - current: "account\x00key\n" per line
+//
+// Keys cannot contain '\n', so line-based parsing is safe in both formats.
+func parseSecrets(decrypted string) map[string]string {
+	existing := make(map[string]string)
+	for _, line := range strings.Split(decrypted, "\n") {
+		if line == "" {
+			continue
+		}
+		var account, key string
+		if idx := strings.IndexByte(line, '\x00'); idx >= 0 {
+			account, key = line[:idx], line[idx+1:]
+		} else if idx := strings.IndexByte(line, ':'); idx >= 0 {
+			account, key = line[:idx], line[idx+1:]
+		} else {
+			continue
+		}
+		if account == "" || key == "" {
+			continue
+		}
+		existing[account] = key
+	}
+	return existing
+}
+
+// validateAccountName rejects names that would corrupt the secrets file
+// format (newline in either format, NUL in the current format, colon in the
+// legacy format).
+func validateAccountName(account string) error {
+	if account == "" {
+		return fmt.Errorf("account name cannot be empty")
+	}
+	if strings.ContainsAny(account, "\n\x00:") {
+		return fmt.Errorf("account name cannot contain newline, NUL, or ':' characters")
+	}
+	return nil
+}
+
+// loadEncrypted reads and decrypts the secrets file. Returns (nil, nil) when
+// the file does not exist. Any other read/parse/decrypt error is returned:
+// callers must NOT silently overwrite the file in that case.
+func loadEncrypted() (map[string]string, error) {
 	path, err := getEncryptedPath()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// Ensure directory exists
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(string(data))
+	if err != nil {
+		return nil, fmt.Errorf("secrets file is corrupted (invalid base64): %w", err)
+	}
+
+	pwd, err := getMasterPassword()
+	if err != nil {
+		return nil, err
+	}
+
+	decrypted, err := decrypt(decoded, pwd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt secrets (wrong master password?): %w", err)
+	}
+
+	return parseSecrets(string(decrypted)), nil
+}
+
+// saveEncrypted encrypts and atomically writes the given accounts.
+func saveEncrypted(secrets map[string]string) error {
+	path, err := getEncryptedPath()
+	if err != nil {
 		return err
 	}
 
@@ -188,132 +271,110 @@ func storeEncrypted(account, apiKey string) error {
 		return err
 	}
 
-	// Read existing data
-	existing := make(map[string]string)
-	if data, err := os.ReadFile(path); err == nil {
-		decoded, err := base64.StdEncoding.DecodeString(string(data))
-		if err == nil {
-			decrypted, err := decrypt(decoded, pwd)
-			if err == nil {
-				// Parse existing data
-				lines := strings.Split(string(decrypted), "\n")
-				for _, line := range lines {
-					parts := strings.SplitN(line, "\x00", 2)
-					if len(parts) == 2 {
-						existing[parts[0]] = parts[1]
-					}
-				}
-			}
-		}
-	}
-
-	// Add new account
-	existing[account] = apiKey
-
-	// Build data
 	var data strings.Builder
-	for k, v := range existing {
+	for k, v := range secrets {
 		data.WriteString(k + "\x00" + v + "\n")
 	}
 
-	// Encrypt
 	encrypted, err := encrypt([]byte(data.String()), pwd)
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, []byte(base64.StdEncoding.EncodeToString(encrypted)), 0600)
+	return writeFileAtomic(path, []byte(base64.StdEncoding.EncodeToString(encrypted)), 0600)
+}
+
+// writeFileAtomic writes data to path via a temp file in the same directory
+// followed by rename, so a crash mid-write never truncates the target.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+
+	tmp, err := os.CreateTemp(dir, ".tmp-"+filepath.Base(path)+"-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+
+	cleanup := func() {
+		tmp.Close()
+		os.Remove(tmpName)
+	}
+
+	if _, err := tmp.Write(data); err != nil {
+		cleanup()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		cleanup()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Chmod(tmpName, perm); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return nil
+}
+
+func storeEncrypted(account, apiKey string) error {
+	if err := validateAccountName(account); err != nil {
+		return err
+	}
+
+	return withSecretsLock(func() error {
+		existing, err := loadEncrypted()
+		if err != nil {
+			return err
+		}
+		if existing == nil {
+			existing = make(map[string]string)
+		}
+
+		existing[account] = apiKey
+		return saveEncrypted(existing)
+	})
 }
 
 func getEncrypted(account string) (string, error) {
-	path, err := getEncryptedPath()
+	secrets, err := loadEncrypted()
 	if err != nil {
 		return "", err
 	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf("API key not found for account: %s", account)
-		}
-		return "", err
+	if secrets == nil {
+		return "", fmt.Errorf("API key not found for account: %s", account)
 	}
 
-	decoded, err := base64.StdEncoding.DecodeString(string(data))
-	if err != nil {
-		return "", err
+	if key, ok := secrets[account]; ok {
+		return key, nil
 	}
-
-	pwd, err := getMasterPassword()
-	if err != nil {
-		return "", err
-	}
-
-	decrypted, err := decrypt(decoded, pwd)
-	if err != nil {
-		return "", err
-	}
-
-	lines := strings.Split(string(decrypted), "\n")
-	for _, line := range lines {
-		parts := strings.SplitN(line, "\x00", 2)
-		if len(parts) == 2 && parts[0] == account {
-			return parts[1], nil
-		}
-	}
-
 	return "", fmt.Errorf("API key not found for account: %s", account)
 }
 
 func deleteEncrypted(account string) error {
-	path, err := getEncryptedPath()
-	if err != nil {
+	if err := validateAccountName(account); err != nil {
 		return err
 	}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
+	return withSecretsLock(func() error {
+		secrets, err := loadEncrypted()
+		if err != nil {
+			return err
+		}
+		if secrets == nil {
 			return nil
 		}
-		return err
-	}
 
-	decoded, err := base64.StdEncoding.DecodeString(string(data))
-	if err != nil {
-		return err
-	}
-
-	pwd, err := getMasterPassword()
-	if err != nil {
-		return err
-	}
-
-	decrypted, err := decrypt(decoded, pwd)
-	if err != nil {
-		return err
-	}
-
-	existing := make(map[string]string)
-	lines := strings.Split(string(decrypted), "\n")
-	for _, line := range lines {
-		parts := strings.SplitN(line, "\x00", 2)
-		if len(parts) == 2 {
-			existing[parts[0]] = parts[1]
-		}
-	}
-
-	delete(existing, account)
-
-	var newData strings.Builder
-	for k, v := range existing {
-		newData.WriteString(k + "\x00" + v + "\n")
-	}
-
-	encrypted, err := encrypt([]byte(newData.String()), pwd)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, []byte(base64.StdEncoding.EncodeToString(encrypted)), 0600)
+		delete(secrets, account)
+		return saveEncrypted(secrets)
+	})
 }

@@ -32,9 +32,14 @@ func NewClient(apiKey, baseURL string) *Client {
 
 func (c *Client) doRequest(endpoint string) ([]byte, error) {
 	maxRetries := 3
+	var retryAfter time.Duration
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			backoff := time.Duration(1<<uint(attempt-1)) * time.Second
+			// Honor Retry-After from the previous 429 response when present.
+			if retryAfter > backoff {
+				backoff = retryAfter
+			}
 			time.Sleep(backoff)
 		}
 
@@ -65,6 +70,11 @@ func (c *Client) doRequest(endpoint string) ([]byte, error) {
 
 		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
 			if attempt < maxRetries {
+				if resp.StatusCode == http.StatusTooManyRequests {
+					if d, err := time.ParseDuration(resp.Header.Get("Retry-After") + "s"); err == nil && d > 0 && d <= 5*time.Minute {
+						retryAfter = d
+					}
+				}
 				continue
 			}
 		}

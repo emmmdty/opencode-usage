@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/99designs/keyring"
 )
@@ -52,6 +54,11 @@ func IsKeyringAvailable() bool {
 	return keyringAvailable
 }
 
+// ErrKeyNotFound reports that no key is stored for the account. It is
+// returned by GetAPIKey regardless of the backing store so callers can
+// distinguish "missing" from a genuine store failure.
+var ErrKeyNotFound = errors.New("API key not found")
+
 func StoreAPIKey(service, account, apiKey string) error {
 	if ring != nil {
 		return ring.Set(keyring.Item{
@@ -66,16 +73,30 @@ func GetAPIKey(service, account string) (string, error) {
 	if ring != nil {
 		item, err := ring.Get(account)
 		if err != nil {
-			return "", err
+			if errors.Is(err, keyring.ErrKeyNotFound) {
+				return "", fmt.Errorf("%w for account: %s", ErrKeyNotFound, account)
+			}
+			return "", fmt.Errorf("keyring error: %w", err)
 		}
 		return string(item.Data), nil
 	}
-	return getEncrypted(account)
+	key, err := getEncrypted(account)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return "", fmt.Errorf("%w for account: %s", ErrKeyNotFound, account)
+		}
+		return "", err
+	}
+	return key, nil
 }
 
 func DeleteAPIKey(service, account string) error {
 	if ring != nil {
-		return ring.Remove(account)
+		err := ring.Remove(account)
+		if err != nil && errors.Is(err, keyring.ErrKeyNotFound) {
+			return nil
+		}
+		return err
 	}
 	return deleteEncrypted(account)
 }

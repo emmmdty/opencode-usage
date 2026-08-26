@@ -103,6 +103,55 @@ func TestGetEncryptedPath(t *testing.T) {
 	}
 }
 
+func TestParseSecretsLegacyColonFormat(t *testing.T) {
+	// Old builds wrote "account:key" lines; they must still be readable.
+	input := "alice@example.com:sk-aaa111222333\nbob@example.com:sk-bbb444555666\n"
+	got := parseSecrets(input)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(got))
+	}
+	if got["alice@example.com"] != "sk-aaa111222333" {
+		t.Errorf("alice key mismatch: %s", got["alice@example.com"])
+	}
+	if got["bob@example.com"] != "sk-bbb444555666" {
+		t.Errorf("bob key mismatch: %s", got["bob@example.com"])
+	}
+}
+
+func TestParseSecretsNulFormat(t *testing.T) {
+	input := "alice@example.com\x00sk-aaa111222333\n"
+	got := parseSecrets(input)
+	if len(got) != 1 || got["alice@example.com"] != "sk-aaa111222333" {
+		t.Errorf("unexpected parse result: %v", got)
+	}
+}
+
+func TestParseSecretsMixedAndMalformed(t *testing.T) {
+	input := "a@x.com:sk-legacy\nc@x.com\x00sk-new\n\nno-separator-line\n:empty-account\nempty-key:\n"
+	got := parseSecrets(input)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 entries, got %d: %v", len(got), got)
+	}
+	if got["a@x.com"] != "sk-legacy" || got["c@x.com"] != "sk-new" {
+		t.Errorf("unexpected parse result: %v", got)
+	}
+}
+
+func TestValidateAccountName(t *testing.T) {
+	valid := []string{"user@example.com", "work", "a"}
+	for _, name := range valid {
+		if err := validateAccountName(name); err != nil {
+			t.Errorf("validateAccountName(%q) unexpected error: %v", name, err)
+		}
+	}
+	invalid := []string{"", "with\nnewline", "with\x00nul", "with:colon"}
+	for _, name := range invalid {
+		if err := validateAccountName(name); err == nil {
+			t.Errorf("validateAccountName(%q) expected error", name)
+		}
+	}
+}
+
 func TestStoreAndGetEncrypted(t *testing.T) {
 	// Skip if master password is not available
 	if os.Getenv("OPENCODE_USAGE_MASTER_PASSWORD") == "" {

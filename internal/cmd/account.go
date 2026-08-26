@@ -38,6 +38,9 @@ var accountAddCmd = &cobra.Command{
 		if name == "" {
 			return fmt.Errorf("account name cannot be empty")
 		}
+		if strings.ContainsAny(name, "\n\x00:") {
+			return fmt.Errorf("account name cannot contain newline, NUL, or ':' characters")
+		}
 
 		fmt.Print("API Key: ")
 		apiKeyBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
@@ -74,6 +77,11 @@ var accountAddCmd = &cobra.Command{
 			return fmt.Errorf("account '%s' already exists", name)
 		}
 
+		// Store the key first: if it fails, config is untouched.
+		if err := auth.StoreAPIKey("opencode-usage", name, apiKey); err != nil {
+			return fmt.Errorf("failed to store API key: %w", err)
+		}
+
 		cfg.Accounts[name] = config.Account{
 			Name:         name,
 			KeyID:        auth.ExtractKeyID(apiKey),
@@ -83,13 +91,10 @@ var accountAddCmd = &cobra.Command{
 
 		if err := config.SaveConfig(cfg, configPath); err != nil {
 			delete(cfg.Accounts, name)
+			if delErr := auth.DeleteAPIKey("opencode-usage", name); delErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to roll back stored API key for '%s': %v\n", name, delErr)
+			}
 			return err
-		}
-
-		if err := auth.StoreAPIKey("opencode-usage", name, apiKey); err != nil {
-			delete(cfg.Accounts, name)
-			_ = config.SaveConfig(cfg, configPath)
-			return fmt.Errorf("failed to store API key: %w", err)
 		}
 
 		fmt.Printf("Account '%s' added successfully\n", name)
@@ -333,6 +338,12 @@ var accountImportCmd = &cobra.Command{
 		for _, account := range importData.Accounts {
 			if account.Name == "" || account.APIKey == "" {
 				fmt.Printf("Skipping invalid entry: name=%q\n", account.Name)
+				skipped++
+				continue
+			}
+
+			if strings.ContainsAny(account.Name, "\n\x00:") {
+				fmt.Printf("Skipping account '%s': name contains invalid characters\n", account.Name)
 				skipped++
 				continue
 			}

@@ -83,29 +83,42 @@ func runQuotaOverview(accountFilter string, jsonOut bool, outPath string) error 
 	}
 	sem := make(chan struct{}, maxConcurrent)
 
+	// Resolve credentials for every account up front. This ensures any
+	// interactive master-password prompt happens before concurrent workers
+	// start, and surfaces a wrong password as a clean per-account error
+	// instead of a corrupted read.
+	type credResult struct {
+		name    string
+		apiKey  string
+		credErr error
+	}
+	creds := make([]credResult, 0, len(accountsToQuery))
+	for name := range accountsToQuery {
+		apiKey, err := auth.GetAPIKey("opencode-usage", name)
+		creds = append(creds, credResult{name: name, apiKey: apiKey, credErr: err})
+	}
+
 	var wg sync.WaitGroup
 	results := make(chan struct {
 		name  string
 		usage *models.Usage
 		err   error
-	}, len(accountsToQuery))
+	}, len(creds))
 
-	for name := range accountsToQuery {
+	for _, cred := range creds {
+		if cred.credErr != nil {
+			results <- struct {
+				name  string
+				usage *models.Usage
+				err   error
+			}{cred.name, nil, cred.credErr}
+			continue
+		}
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(name string) {
+		go func(name, apiKey string) {
 			defer wg.Done()
 			defer func() { <-sem }()
-
-			apiKey, err := auth.GetAPIKey("opencode-usage", name)
-			if err != nil {
-				results <- struct {
-					name  string
-					usage *models.Usage
-					err   error
-				}{name, nil, err}
-				return
-			}
 
 			c := client.NewClient(apiKey, "")
 			usage, err := c.GetUsage()
@@ -114,7 +127,7 @@ func runQuotaOverview(accountFilter string, jsonOut bool, outPath string) error 
 				usage *models.Usage
 				err   error
 			}{name, usage, err}
-		}(name)
+		}(cred.name, cred.apiKey)
 	}
 
 	wg.Wait()

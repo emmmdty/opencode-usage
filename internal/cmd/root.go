@@ -58,7 +58,7 @@ func Execute() error {
 
 func writeOutput(content string) error {
 	if outputFile != "" {
-		return os.WriteFile(outputFile, []byte(content), 0644)
+		return os.WriteFile(outputFile, []byte(content), 0600)
 	}
 	_, err := os.Stdout.WriteString(content)
 	return err
@@ -100,10 +100,18 @@ var updateCmd = &cobra.Command{
 			return nil
 		}
 
+		if !isNewerVersion(latestVersion, currentVersion) {
+			fmt.Printf("Installed version %s is newer than latest release %s; skipping downgrade.\n", currentVersion, latestVersion)
+			return nil
+		}
+
 		fmt.Printf("New version available: %s (current: %s)\n", latestVersion, currentVersion)
 
 		binaryURL, err := getBinaryURL(release)
 		if err != nil {
+			if len(release.Assets) == 0 {
+				return fmt.Errorf("update is unavailable (no release assets found for tag %s); please install manually from https://github.com/emmmdty/opencode-usage/releases", release.TagName)
+			}
 			return fmt.Errorf("no binary found for your platform (%s/%s): %w", runtime.GOOS, runtime.GOARCH, err)
 		}
 
@@ -119,13 +127,17 @@ var updateCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("cannot determine executable path: %w", err)
 		}
+		// Resolve symlinks so we replace the real binary, not the link.
+		if resolved, err := filepath.EvalSymlinks(execPath); err == nil {
+			execPath = resolved
+		}
 
 		if err := os.Chmod(tmpFile, 0755); err != nil {
 			return fmt.Errorf("failed to set permissions: %w", err)
 		}
 
-		if err := os.Rename(tmpFile, execPath); err != nil {
-			return fmt.Errorf("failed to replace binary: %w\nYou may need to run with sudo", err)
+		if err := replaceBinary(tmpFile, execPath); err != nil {
+			return fmt.Errorf("failed to replace binary: %w", err)
 		}
 
 		fmt.Printf("Updated to %s successfully!\n", latestVersion)
@@ -192,11 +204,78 @@ func getLatestRelease() (*githubRelease, error) {
 			Name string `json:"name"`
 		}
 		if err := json.NewDecoder(resp2.Body).Decode(&tags); err == nil && len(tags) > 0 {
+			// Tags have no release assets; report the version only.
 			return &githubRelease{TagName: tags[0].Name}, nil
 		}
 	}
 
 	return nil, fmt.Errorf("could not check for updates (HTTP %d)", resp.StatusCode)
+}
+
+// isNewerVersion reports whether latest is strictly newer than current,
+// comparing dot-separated numeric segments (e.g. 0.3.0 > 0.2.1).
+func isNewerVersion(latest, current string) bool {
+	parse := func(v string) []int {
+		var out []int
+		for _, part := range strings.Split(v, ".") {
+			n := 0
+			for _, r := range part {
+				if r < '0' || r > '9' {
+					break
+				}
+				n = n*10 + int(r-'0')
+			}
+			out = append(out, n)
+		}
+		return out
+	}
+
+	l, c := parse(latest), parse(current)
+	maxLen := len(l)
+	if len(c) > maxLen {
+		maxLen = len(c)
+	}
+	for i := 0; i < maxLen; i++ {
+		var lv, cv int
+		if i < len(l) {
+			lv = l[i]
+		}
+		if i < len(c) {
+			cv = c[i]
+		}
+		if lv != cv {
+			return lv > cv
+		}
+	}
+	return false
+}
+
+// replaceBinary installs tmpFile at execPath. On Windows the running binary
+// cannot be overwritten, so the old one is moved aside and removed later.
+// On Unix a plain rename works even while running.
+func replaceBinary(tmpFile, execPath string) error {
+	err := os.Rename(tmpFile, execPath)
+	if err == nil {
+		return nil
+	}
+
+	if runtime.GOOS == "windows" {
+		// Move the running binary aside, then put the new one in place.
+		old := execPath + ".old"
+		_ = os.Remove(old)
+		if err := os.Rename(execPath, old); err != nil {
+			return fmt.Errorf("cannot move current binary: %w", err)
+		}
+		if err := os.Rename(tmpFile, execPath); err != nil {
+			// Try to restore.
+			_ = os.Rename(old, execPath)
+			return fmt.Errorf("cannot install new binary: %w", err)
+		}
+		_ = os.Remove(old) // may fail while running; cleaned up on next run
+		return nil
+	}
+
+	return fmt.Errorf("%w (you may need to run with sudo, or the temp dir and install dir are on different filesystems)", err)
 }
 
 func getBinaryURL(release *githubRelease) (string, error) {
@@ -243,9 +322,23 @@ func downloadBinary(url string) (string, error) {
 		return "", fmt.Errorf("download returned status %d", resp.StatusCode)
 	}
 
-	tmpFile, err := os.CreateTemp("", "opencode-usage-update-*")
+	// Prefer a temp file in the executable's directory so the final rename
+	// cannot fail with a cross-device link error.
+	dir := ""
+	if execPath, err := os.Executable(); err == nil {
+		dir = filepath.Dir(execPath)
+	}
+	if dir == "" {
+		dir = os.TempDir()
+	}
+
+	tmpFile, err := os.CreateTemp(dir, ".opencode-usage-update-*")
 	if err != nil {
-		return "", err
+		// Fall back to the system temp dir if the install dir is not writable.
+		tmpFile, err = os.CreateTemp("", "opencode-usage-update-*")
+		if err != nil {
+			return "", err
+		}
 	}
 
 	if _, err := io.Copy(tmpFile, resp.Body); err != nil {

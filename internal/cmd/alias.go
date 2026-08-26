@@ -115,17 +115,28 @@ func aliasExists(rcFile, alias string) bool {
 }
 
 func removeAlias(rcFile, alias string) error {
-	file, err := os.Open(rcFile)
+	info, err := os.Stat(rcFile)
+	if err != nil {
+		return err
+	}
+	perm := info.Mode().Perm()
+
+	data, err := os.ReadFile(rcFile)
 	if err != nil {
 		return err
 	}
 
+	// Preserve the original line ending style.
+	newline := "\n"
+	if strings.Contains(string(data), "\r\n") {
+		newline = "\r\n"
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	var lines []string
-	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}
-	file.Close()
 
 	aliasLine := "alias " + alias + "="
 	var result []string
@@ -139,7 +150,12 @@ func removeAlias(rcFile, alias string) error {
 		result = append(result, line)
 	}
 
-	return os.WriteFile(rcFile, []byte(strings.Join(result, "\n")+"\n"), 0644)
+	content := strings.Join(result, newline)
+	if content != "" && !strings.HasSuffix(content, newline) {
+		content += newline
+	}
+
+	return os.WriteFile(rcFile, []byte(content), perm)
 }
 
 func init() {
