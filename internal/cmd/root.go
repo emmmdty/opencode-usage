@@ -177,11 +177,7 @@ func getLatestRelease() (*githubRelease, error) {
 	}
 
 	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
-		msg := "GitHub API rate limited. Solutions:\n"
-		msg += "  1. Install gh CLI: https://cli.github.com\n"
-		msg += "  2. Set GITHUB_TOKEN environment variable\n"
-		msg += "  3. Wait an hour for rate limit to reset"
-		return nil, fmt.Errorf(msg)
+		return nil, fmt.Errorf("GitHub API rate limited. Solutions:\n  1. Install gh CLI: https://cli.github.com\n  2. Set GITHUB_TOKEN environment variable\n  3. Wait an hour for rate limit to reset")
 	}
 
 	// Fallback: list tags
