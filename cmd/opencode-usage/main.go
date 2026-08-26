@@ -3,16 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"github.com/opencode-usage/internal/cmd"
 )
 
 func main() {
-	if err := run(); err != nil {
+	if err := cmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
-}
-
-func run() error {
-	// TODO: 实现命令解析
-	return nil
 }
