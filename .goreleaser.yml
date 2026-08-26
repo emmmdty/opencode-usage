@@ -17,17 +17,20 @@ builds:
       - arm64
 
 archives:
-  - format: tar.gz
+  - id: packages
+    formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
+  # Raw binaries: `ou update` downloads these directly (no unpack step).
+  # goreleaser preserves the .exe extension for Windows binaries automatically.
+  - id: binaries
+    formats: [binary]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"
-
-snapshot:
-  name_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
@@ -35,3 +38,4 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
+      - "^chore:"
