@@ -137,7 +137,6 @@ func getGitHubToken() string {
 	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
 		return token
 	}
-	// Try to get token from gh CLI
 	out, err := exec.Command("gh", "auth", "token").Output()
 	if err == nil {
 		return strings.TrimSpace(string(out))
@@ -145,12 +144,9 @@ func getGitHubToken() string {
 	return ""
 }
 
-func getLatestRelease() (*githubRelease, error) {
+func doGitHubRequest(url string, token string) (*http.Response, error) {
 	client := &http.Client{Timeout: 15 * time.Second}
-	token := getGitHubToken()
-
-	// Try releases/latest first
-	req, err := http.NewRequest("GET", "https://api.github.com/repos/emmmdty/opencode-usage/releases/latest", nil)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -159,16 +155,18 @@ func getLatestRelease() (*githubRelease, error) {
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	return client.Do(req)
+}
 
-	resp, err := client.Do(req)
+func getLatestRelease() (*githubRelease, error) {
+	token := getGitHubToken()
+
+	// Try releases/latest
+	resp, err := doGitHubRequest("https://api.github.com/repos/emmmdty/opencode-usage/releases/latest", token)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("GitHub API rate limited (set GITHUB_TOKEN to increase limits)")
-	}
 
 	if resp.StatusCode == http.StatusOK {
 		var release githubRelease
@@ -178,39 +176,31 @@ func getLatestRelease() (*githubRelease, error) {
 		return &release, nil
 	}
 
-	// Fallback: list tags and find latest
-	req2, err := http.NewRequest("GET", "https://api.github.com/repos/emmmdty/opencode-usage/tags?per_page=10", nil)
-	if err != nil {
-		return nil, err
-	}
-	req2.Header.Set("Accept", "application/vnd.github.v3+json")
-	req2.Header.Set("User-Agent", "opencode-usage/"+version.Version)
-	if token != "" {
-		req2.Header.Set("Authorization", "Bearer "+token)
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
+		msg := "GitHub API rate limited. Solutions:\n"
+		msg += "  1. Install gh CLI: https://cli.github.com\n"
+		msg += "  2. Set GITHUB_TOKEN environment variable\n"
+		msg += "  3. Wait an hour for rate limit to reset"
+		return nil, fmt.Errorf(msg)
 	}
 
-	resp2, err := client.Do(req2)
+	// Fallback: list tags
+	resp2, err := doGitHubRequest("https://api.github.com/repos/emmmdty/opencode-usage/tags?per_page=10", token)
 	if err != nil {
 		return nil, err
 	}
 	defer resp2.Body.Close()
 
-	if resp2.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub API returned status %d", resp2.StatusCode)
+	if resp2.StatusCode == http.StatusOK {
+		var tags []struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(resp2.Body).Decode(&tags); err == nil && len(tags) > 0 {
+			return &githubRelease{TagName: tags[0].Name}, nil
+		}
 	}
 
-	var tags []struct {
-		Name string `json:"name"`
-	}
-	if err := json.NewDecoder(resp2.Body).Decode(&tags); err != nil {
-		return nil, err
-	}
-
-	if len(tags) == 0 {
-		return nil, fmt.Errorf("no releases or tags found")
-	}
-
-	return &githubRelease{TagName: tags[0].Name}, nil
+	return nil, fmt.Errorf("could not check for updates (HTTP %d)", resp.StatusCode)
 }
 
 func getBinaryURL(release *githubRelease) (string, error) {
