@@ -11,16 +11,16 @@ import (
 
 var aliasCmd = &cobra.Command{
 	Use:   "alias",
-	Short: "管理shell别名",
+	Short: "Manage shell aliases",
 }
 
 var aliasInstallCmd = &cobra.Command{
 	Use:   "install",
-	Short: "安装shell别名",
+	Short: "Install shell alias",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return fmt.Errorf("获取用户主目录失败: %w", err)
+			return fmt.Errorf("failed to get home directory: %w", err)
 		}
 
 		shell := os.Getenv("SHELL")
@@ -32,15 +32,15 @@ var aliasInstallCmd = &cobra.Command{
 		}
 
 		if aliasExists(rcFile, "ou") {
-			fmt.Printf("别名 'ou' 已存在于 %s\n", rcFile)
-			fmt.Print("是否覆盖？(y/N): ")
+			fmt.Printf("Alias 'ou' already exists in %s\n", rcFile)
+			fmt.Print("Overwrite? (y/N): ")
 
 			reader := bufio.NewReader(os.Stdin)
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(response)
 
 			if response != "y" && response != "Y" {
-				fmt.Println("已取消")
+				fmt.Println("Cancelled")
 				return nil
 			}
 		}
@@ -57,8 +57,8 @@ var aliasInstallCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("别名已添加到 %s\n", rcFile)
-		fmt.Println("请运行 'source " + rcFile + "' 或重新打开终端")
+		fmt.Printf("Alias added to %s\n", rcFile)
+		fmt.Println("Run 'source " + rcFile + "' or restart your terminal")
 
 		return nil
 	},
@@ -66,11 +66,11 @@ var aliasInstallCmd = &cobra.Command{
 
 var aliasUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
-	Short: "卸载shell别名",
+	Short: "Uninstall shell alias",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return fmt.Errorf("获取用户主目录失败: %w", err)
+			return fmt.Errorf("failed to get home directory: %w", err)
 		}
 
 		shell := os.Getenv("SHELL")
@@ -82,7 +82,7 @@ var aliasUninstallCmd = &cobra.Command{
 		}
 
 		if !aliasExists(rcFile, "ou") {
-			fmt.Printf("别名 'ou' 不存在于 %s\n", rcFile)
+			fmt.Printf("Alias 'ou' not found in %s\n", rcFile)
 			return nil
 		}
 
@@ -90,8 +90,8 @@ var aliasUninstallCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("别名 'ou' 已从 %s 移除\n", rcFile)
-		fmt.Println("请运行 'source " + rcFile + "' 或重新打开终端")
+		fmt.Printf("Alias 'ou' removed from %s\n", rcFile)
+		fmt.Println("Run 'source " + rcFile + "' or restart your terminal")
 		return nil
 	},
 }

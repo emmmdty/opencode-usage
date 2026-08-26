@@ -9,28 +9,28 @@ func TestKeyringOperations(t *testing.T) {
 	if !IsKeyringAvailable() && os.Getenv("OPENCODE_USAGE_MASTER_PASSWORD") == "" {
 		t.Skip("skipping: no keyring and no OPENCODE_USAGE_MASTER_PASSWORD set")
 	}
-	
+
 	serviceName := "opencode-usage-test"
 	accountName := "test-account"
 	apiKey := "sk-test1234567890"
-	
+
 	if err := StoreAPIKey(serviceName, accountName, apiKey); err != nil {
 		t.Fatalf("failed to store API key: %v", err)
 	}
-	
+
 	retrieved, err := GetAPIKey(serviceName, accountName)
 	if err != nil {
 		t.Fatalf("failed to get API key: %v", err)
 	}
-	
+
 	if retrieved != apiKey {
 		t.Errorf("expected %s, got %s", apiKey, retrieved)
 	}
-	
+
 	if err := DeleteAPIKey(serviceName, accountName); err != nil {
 		t.Fatalf("failed to delete API key: %v", err)
 	}
-	
+
 	_, err = GetAPIKey(serviceName, accountName)
 	if err == nil {
 		t.Error("expected error after deletion")
@@ -46,7 +46,7 @@ func TestExtractKeyID(t *testing.T) {
 		{"sk-test-abcdef123456", "123456"},
 		{"short", "short"},
 	}
-	
+
 	for _, tt := range tests {
 		result := ExtractKeyID(tt.key)
 		if result != tt.expected {

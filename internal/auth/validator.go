@@ -25,54 +25,54 @@ func ValidateAPIKey(apiKey, baseURL string) (*ValidationResponse, error) {
 			baseURL = defaultBaseURL
 		}
 	}
-	
+
 	client := &http.Client{Timeout: timeout}
 	req, err := http.NewRequest("GET", baseURL+"/usage", nil)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	req.Header.Set("Authorization", "Bearer "+apiKey)
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return &ValidationResponse{
 			Valid:   false,
 			Error:   "network_error",
-			Message: "网络连接失败，请检查网络",
+			Message: "Network connection failed, please check your network",
 		}, nil
 	}
 	defer resp.Body.Close()
-	
+
 	switch resp.StatusCode {
 	case http.StatusOK:
 		return &ValidationResponse{
 			Valid:   true,
-			Message: "API Key有效",
+			Message: "API Key is valid",
 		}, nil
 	case http.StatusUnauthorized:
 		return &ValidationResponse{
 			Valid:   false,
 			Error:   "invalid_api_key",
-			Message: "请检查您的API Key",
+			Message: "Please check your API Key",
 		}, nil
 	case http.StatusForbidden:
 		return &ValidationResponse{
 			Valid:   false,
 			Error:   "no_go_subscription",
-			Message: "请订阅OpenCode Go计划",
+			Message: "Please subscribe to the OpenCode Go plan",
 		}, nil
 	case http.StatusTooManyRequests:
 		return &ValidationResponse{
 			Valid:   false,
 			Error:   "rate_limited",
-			Message: "请求过于频繁，请稍后重试",
+			Message: "Too many requests, please try again later",
 		}, nil
 	default:
 		return &ValidationResponse{
 			Valid:   false,
 			Error:   "server_error",
-			Message: fmt.Sprintf("服务器错误: HTTP %d", resp.StatusCode),
+			Message: fmt.Sprintf("Server error: HTTP %d", resp.StatusCode),
 		}, nil
 	}
 }

@@ -44,7 +44,7 @@ func TestValidateAPIKey(t *testing.T) {
 			errorCode:  "server_error",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -54,16 +54,16 @@ func TestValidateAPIKey(t *testing.T) {
 				w.WriteHeader(tt.statusCode)
 			}))
 			defer server.Close()
-			
+
 			resp, err := ValidateAPIKey("test-key", server.URL)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			
+
 			if resp.Valid != tt.valid {
 				t.Errorf("expected Valid=%v, got %v", tt.valid, resp.Valid)
 			}
-			
+
 			if tt.errorCode != "" && resp.Error != tt.errorCode {
 				t.Errorf("expected Error=%s, got %s", tt.errorCode, resp.Error)
 			}
@@ -76,11 +76,11 @@ func TestValidateAPIKeyNetworkError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	
+
 	if resp.Valid {
 		t.Error("expected Valid=false for network error")
 	}
-	
+
 	if resp.Error != "network_error" {
 		t.Errorf("expected Error='network_error', got '%s'", resp.Error)
 	}
@@ -107,21 +107,21 @@ func TestValidationResponseJSON(t *testing.T) {
 		Error:   "invalid_api_key",
 		Message: "Invalid API key",
 	}
-	
+
 	data, err := json.Marshal(resp)
 	if err != nil {
 		t.Fatalf("failed to marshal ValidationResponse: %v", err)
 	}
-	
+
 	var decoded ValidationResponse
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("failed to unmarshal ValidationResponse: %v", err)
 	}
-	
+
 	if decoded.Valid != resp.Valid {
 		t.Errorf("expected Valid=%v, got %v", resp.Valid, decoded.Valid)
 	}
-	
+
 	if decoded.Error != resp.Error {
 		t.Errorf("expected Error=%s, got %s", resp.Error, decoded.Error)
 	}

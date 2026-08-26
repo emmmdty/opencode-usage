@@ -11,13 +11,13 @@ import (
 const CurrentVersion = "1"
 
 type Config struct {
-	Version    string             `yaml:"version"`
-	Accounts   map[string]Account `yaml:"accounts"`
+	Version         string             `yaml:"version"`
+	Accounts        map[string]Account `yaml:"accounts"`
 	ColorThresholds struct {
 		Warning int `yaml:"warning"`
 		Danger  int `yaml:"danger"`
 	} `yaml:"color_thresholds"`
-	MaxConcurrentRequests int  `yaml:"max_concurrent_requests"`
+	MaxConcurrentRequests int   `yaml:"max_concurrent_requests"`
 	UseMasterPassword     *bool `yaml:"use_master_password,omitempty"`
 }
 
@@ -105,5 +105,6 @@ func migrateConfig(old *Config) *Config {
 	if old.MaxConcurrentRequests != 0 {
 		cfg.MaxConcurrentRequests = old.MaxConcurrentRequests
 	}
+	cfg.UseMasterPassword = old.UseMasterPassword
 	return cfg
 }

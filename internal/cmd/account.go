@@ -9,53 +9,54 @@ import (
 	"strings"
 	"time"
 
+	"github.com/emmmdty/opencode-usage/internal/auth"
+	"github.com/emmmdty/opencode-usage/internal/config"
+	"github.com/mattn/go-runewidth"
 	"github.com/spf13/cobra"
-	"github.com/opencode-usage/internal/auth"
-	"github.com/opencode-usage/internal/config"
 	"golang.org/x/term"
 )
 
 var accountCmd = &cobra.Command{
 	Use:     "account",
 	Aliases: []string{"a"},
-	Short:   "管理OpenCode Go账号",
+	Short:   "Manage OpenCode Go accounts",
 }
 
 var accountAddCmd = &cobra.Command{
 	Use:     "add",
 	Aliases: []string{"aa"},
-	Short:   "添加新账号",
+	Short:   "Add a new account",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		reader := bufio.NewReader(os.Stdin)
 
-		fmt.Print("请输入账号名称: ")
+		fmt.Print("Account name: ")
 		name, err := reader.ReadString('\n')
 		if err != nil {
-			return fmt.Errorf("读取账号名称失败: %w", err)
+			return fmt.Errorf("failed to read account name: %w", err)
 		}
 		name = strings.TrimSpace(name)
 		if name == "" {
-			return fmt.Errorf("账号名称不能为空")
+			return fmt.Errorf("account name cannot be empty")
 		}
 
-		fmt.Print("请输入API Key: ")
+		fmt.Print("API Key: ")
 		apiKeyBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
 		if err != nil {
-			return fmt.Errorf("读取API Key失败: %w", err)
+			return fmt.Errorf("failed to read API key: %w", err)
 		}
 		fmt.Println()
 		apiKey := strings.TrimSpace(string(apiKeyBytes))
 		if apiKey == "" {
-			return fmt.Errorf("API Key不能为空")
+			return fmt.Errorf("API key cannot be empty")
 		}
 
-		fmt.Println("正在验证API Key...")
+		fmt.Println("Validating API key...")
 		result, err := auth.ValidateAPIKey(apiKey, "")
 		if err != nil {
-			return fmt.Errorf("验证API Key时出错: %w", err)
+			return fmt.Errorf("error validating API key: %w", err)
 		}
 		if !result.Valid {
-			return fmt.Errorf("API Key无效: %s", result.Message)
+			return fmt.Errorf("invalid API key: %s", result.Message)
 		}
 
 		configPath, err := getConfigPath()
@@ -70,37 +71,37 @@ var accountAddCmd = &cobra.Command{
 		configureAuthFromConfig(cfg)
 
 		if _, exists := cfg.Accounts[name]; exists {
-			return fmt.Errorf("账号 '%s' 已存在，请使用 'opencode-usage account remove %s' 删除后重新添加", name, name)
-		}
-
-		if err := auth.StoreAPIKey("opencode-usage", name, apiKey); err != nil {
-			return fmt.Errorf("存储API Key失败: %w", err)
+			return fmt.Errorf("account '%s' already exists", name)
 		}
 
 		cfg.Accounts[name] = config.Account{
 			Name:         name,
 			KeyID:        auth.ExtractKeyID(apiKey),
-			CreatedAt:    timeNow(),
-			LastVerified: timeNow(),
+			CreatedAt:    time.Now(),
+			LastVerified: time.Now(),
 		}
 
 		if err := config.SaveConfig(cfg, configPath); err != nil {
+			delete(cfg.Accounts, name)
 			return err
 		}
 
-		fmt.Printf("账号 '%s' 添加成功\n", name)
+		if err := auth.StoreAPIKey("opencode-usage", name, apiKey); err != nil {
+			delete(cfg.Accounts, name)
+			_ = config.SaveConfig(cfg, configPath)
+			return fmt.Errorf("failed to store API key: %w", err)
+		}
+
+		fmt.Printf("Account '%s' added successfully\n", name)
+		fmt.Println("Run 'opencode-usage quota' to view all accounts.")
 		return nil
 	},
-}
-
-func timeNow() time.Time {
-	return time.Now()
 }
 
 var accountListCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"al"},
-	Short:   "查看所有账号",
+	Short:   "List all accounts",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, err := getConfigPath()
 		if err != nil {
@@ -114,9 +115,10 @@ var accountListCmd = &cobra.Command{
 		configureAuthFromConfig(cfg)
 
 		if len(cfg.Accounts) == 0 {
-			fmt.Println("暂无配置的账号")
-			return nil
+			return writeOutput("No accounts configured. Run 'opencode-usage account add' to get started.\n")
 		}
+
+		currentAccount := resolveCurrentAccount(cfg)
 
 		names := make([]string, 0, len(cfg.Accounts))
 		for name := range cfg.Accounts {
@@ -124,29 +126,75 @@ var accountListCmd = &cobra.Command{
 		}
 		sort.Strings(names)
 
+		nameWidth := 7
+		for _, name := range names {
+			w := runewidth.StringWidth(name)
+			if w+2 > nameWidth {
+				nameWidth = w + 2
+			}
+		}
+
+		var out strings.Builder
 		for _, name := range names {
 			account := cfg.Accounts[name]
-			status := "未验证"
-			lastVerified := "从未验证"
+			status := "unverified"
+			lastVerified := "never"
 			if !account.LastVerified.IsZero() {
-				lastVerified = account.LastVerified.Format("2006-01-02 15:04:05")
+				lastVerified = formatRelativeTime(account.LastVerified)
 				if time.Since(account.LastVerified) < 24*time.Hour {
-					status = "正常"
+					status = "ok"
 				} else {
-					status = "可能过期"
+					status = "stale"
 				}
 			}
-			fmt.Printf("账号: %-12s Key ID: sk-...%-6s 状态: %-8s 上次验证: %s\n",
-				name, account.KeyID, status, lastVerified)
+
+			marker := "  "
+			if name == currentAccount {
+				marker = "-> "
+			}
+
+			keyID := "sk-..." + account.KeyID
+			paddedName := name + strings.Repeat(" ", nameWidth-runewidth.StringWidth(name))
+
+			fmt.Fprintf(&out, "  %s%s  Key: %-12s  Status: %-10s  Last verified: %s\n",
+				marker, paddedName, keyID, status, lastVerified)
 		}
-		return nil
+		return writeOutput(out.String())
 	},
+}
+
+func formatRelativeTime(t time.Time) string {
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		mins := int(d.Minutes())
+		if mins == 1 {
+			return "1 min ago"
+		}
+		return fmt.Sprintf("%d mins ago", mins)
+	case d < 24*time.Hour:
+		hours := int(d.Hours())
+		if hours == 1 {
+			return "1 hour ago"
+		}
+		return fmt.Sprintf("%d hours ago", hours)
+	case d < 30*24*time.Hour:
+		days := int(d.Hours() / 24)
+		if days == 1 {
+			return "1 day ago"
+		}
+		return fmt.Sprintf("%d days ago", days)
+	default:
+		return t.Format("2006-01-02")
+	}
 }
 
 var accountRemoveCmd = &cobra.Command{
 	Use:     "remove",
 	Aliases: []string{"ar"},
-	Short:   "删除账号",
+	Short:   "Remove an account",
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		accountName := args[0]
@@ -163,11 +211,7 @@ var accountRemoveCmd = &cobra.Command{
 		configureAuthFromConfig(cfg)
 
 		if _, exists := cfg.Accounts[accountName]; !exists {
-			return fmt.Errorf("账号 '%s' 不存在", accountName)
-		}
-
-		if err := auth.DeleteAPIKey("opencode-usage", accountName); err != nil {
-			return err
+			return fmt.Errorf("account '%s' not found", accountName)
 		}
 
 		delete(cfg.Accounts, accountName)
@@ -176,7 +220,11 @@ var accountRemoveCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("账号 '%s' 已删除\n", accountName)
+		if err := auth.DeleteAPIKey("opencode-usage", accountName); err != nil {
+			return fmt.Errorf("account removed from config but key deletion failed: %w", err)
+		}
+
+		fmt.Printf("Account '%s' removed\n", accountName)
 		return nil
 	},
 }
@@ -202,7 +250,7 @@ type ImportData struct {
 var accountExportCmd = &cobra.Command{
 	Use:     "export",
 	Aliases: []string{"ae"},
-	Short:   "导出账号配置",
+	Short:   "Export account configuration",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, err := getConfigPath()
 		if err != nil {
@@ -216,7 +264,7 @@ var accountExportCmd = &cobra.Command{
 		configureAuthFromConfig(cfg)
 
 		if len(cfg.Accounts) == 0 {
-			return fmt.Errorf("暂无配置的账号")
+			return fmt.Errorf("no accounts configured")
 		}
 
 		var exportData ExportData
@@ -233,14 +281,14 @@ var accountExportCmd = &cobra.Command{
 
 		jsonData, err := json.MarshalIndent(exportData, "", "  ")
 		if err != nil {
-			return fmt.Errorf("序列化JSON失败: %w", err)
+			return fmt.Errorf("failed to serialize JSON: %w", err)
 		}
 
 		if outputFile != "" {
 			if err := os.WriteFile(outputFile, jsonData, 0600); err != nil {
-				return fmt.Errorf("写入文件失败: %w", err)
+				return fmt.Errorf("failed to write file: %w", err)
 			}
-			fmt.Printf("账号配置已导出到: %s\n", outputFile)
+			fmt.Printf("Account configuration exported to: %s\n", outputFile)
 		} else {
 			fmt.Println(string(jsonData))
 		}
@@ -251,23 +299,23 @@ var accountExportCmd = &cobra.Command{
 var accountImportCmd = &cobra.Command{
 	Use:     "import",
 	Aliases: []string{"ai"},
-	Short:   "导入账号配置",
+	Short:   "Import account configuration",
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		filePath := args[0]
 
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			return fmt.Errorf("读取文件失败: %w", err)
+			return fmt.Errorf("failed to read file: %w", err)
 		}
 
 		var importData ImportData
 		if err := json.Unmarshal(data, &importData); err != nil {
-			return fmt.Errorf("解析JSON失败: %w", err)
+			return fmt.Errorf("failed to parse JSON: %w", err)
 		}
 
 		if len(importData.Accounts) == 0 {
-			return fmt.Errorf("没有找到可导入的账号")
+			return fmt.Errorf("no importable accounts found")
 		}
 
 		configPath, err := getConfigPath()
@@ -284,32 +332,32 @@ var accountImportCmd = &cobra.Command{
 		var imported, skipped int
 		for _, account := range importData.Accounts {
 			if account.Name == "" || account.APIKey == "" {
-				fmt.Printf("跳过无效条目: name=%q\n", account.Name)
+				fmt.Printf("Skipping invalid entry: name=%q\n", account.Name)
 				skipped++
 				continue
 			}
 
 			if _, exists := cfg.Accounts[account.Name]; exists {
-				fmt.Printf("跳过已存在的账号: '%s'\n", account.Name)
+				fmt.Printf("Skipping existing account: '%s'\n", account.Name)
 				skipped++
 				continue
 			}
 
-			fmt.Printf("正在验证账号 '%s' 的API Key...\n", account.Name)
+			fmt.Printf("Validating account '%s'...\n", account.Name)
 			result, err := auth.ValidateAPIKey(account.APIKey, "")
 			if err != nil {
-				fmt.Printf("跳过账号 '%s': 验证出错: %v\n", account.Name, err)
+				fmt.Printf("Skipping account '%s': validation error: %v\n", account.Name, err)
 				skipped++
 				continue
 			}
 			if !result.Valid {
-				fmt.Printf("跳过账号 '%s': API Key无效: %s\n", account.Name, result.Message)
+				fmt.Printf("Skipping account '%s': invalid key: %s\n", account.Name, result.Message)
 				skipped++
 				continue
 			}
 
 			if err := auth.StoreAPIKey("opencode-usage", account.Name, account.APIKey); err != nil {
-				fmt.Printf("跳过账号 '%s': 存储失败: %v\n", account.Name, err)
+				fmt.Printf("Skipping account '%s': storage error: %v\n", account.Name, err)
 				skipped++
 				continue
 			}
@@ -317,61 +365,23 @@ var accountImportCmd = &cobra.Command{
 			cfg.Accounts[account.Name] = config.Account{
 				Name:         account.Name,
 				KeyID:        auth.ExtractKeyID(account.APIKey),
-				CreatedAt:    timeNow(),
-				LastVerified: timeNow(),
+				CreatedAt:    time.Now(),
+				LastVerified: time.Now(),
 			}
-			fmt.Printf("导入账号 '%s' 成功\n", account.Name)
+
+			if err := config.SaveConfig(cfg, configPath); err != nil {
+				_ = auth.DeleteAPIKey("opencode-usage", account.Name)
+				fmt.Printf("Skipping account '%s': config save error: %v\n", account.Name, err)
+				skipped++
+				continue
+			}
+
+			fmt.Printf("Imported account '%s'\n", account.Name)
 			imported++
 		}
 
-		if err := config.SaveConfig(cfg, configPath); err != nil {
-			return err
-		}
-
-		fmt.Printf("\n导入完成: 成功 %d, 跳过 %d\n", imported, skipped)
+		fmt.Printf("\nImport complete: %d imported, %d skipped\n", imported, skipped)
 		return nil
-	},
-}
-
-var accountAddAliasCmd = &cobra.Command{
-	Use:   "aa",
-	Short: "添加新账号 (account add别名)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return accountAddCmd.RunE(cmd, args)
-	},
-}
-
-var accountListAliasCmd = &cobra.Command{
-	Use:   "al",
-	Short: "查看所有账号 (account list别名)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return accountListCmd.RunE(cmd, args)
-	},
-}
-
-var accountRemoveAliasCmd = &cobra.Command{
-	Use:   "ar",
-	Short: "删除账号 (account remove别名)",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return accountRemoveCmd.RunE(cmd, args)
-	},
-}
-
-var accountExportAliasCmd = &cobra.Command{
-	Use:   "ae",
-	Short: "导出账号配置 (account export别名)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return accountExportCmd.RunE(cmd, args)
-	},
-}
-
-var accountImportAliasCmd = &cobra.Command{
-	Use:   "ai",
-	Short: "导入账号配置 (account import别名)",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return accountImportCmd.RunE(cmd, args)
 	},
 }
 
@@ -382,17 +392,4 @@ func init() {
 	accountCmd.AddCommand(accountExportCmd)
 	accountCmd.AddCommand(accountImportCmd)
 	rootCmd.AddCommand(accountCmd)
-	rootCmd.AddCommand(accountAddAliasCmd)
-	rootCmd.AddCommand(accountListAliasCmd)
-	rootCmd.AddCommand(accountRemoveAliasCmd)
-	rootCmd.AddCommand(accountExportAliasCmd)
-	rootCmd.AddCommand(accountImportAliasCmd)
-}
-
-func getConfigPath() (string, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return homeDir + "/.config/opencode-usage/config.yaml", nil
 }

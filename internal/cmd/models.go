@@ -5,16 +5,16 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/emmmdty/opencode-usage/internal/auth"
+	"github.com/emmmdty/opencode-usage/internal/client"
+	"github.com/emmmdty/opencode-usage/internal/config"
 	"github.com/spf13/cobra"
-	"github.com/opencode-usage/internal/auth"
-	"github.com/opencode-usage/internal/client"
-	"github.com/opencode-usage/internal/config"
 )
 
 var modelsCmd = &cobra.Command{
 	Use:     "models",
 	Aliases: []string{"m"},
-	Short:   "查看可用模型列表",
+	Short:   "List available models",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		apiKey, err := getAPIKeyForCommand()
 		if err != nil {
@@ -31,10 +31,14 @@ var modelsCmd = &cobra.Command{
 			return printJSON(models)
 		}
 
+		if len(models) == 0 {
+			return writeOutput("  No models available for your plan.\n")
+		}
+
 		var b strings.Builder
-		b.WriteString("可用模型:\n")
+		b.WriteString("\n  Available models:\n\n")
 		for _, model := range models {
-			fmt.Fprintf(&b, "  - %s (%s)\n", model.Name, model.ID)
+			fmt.Fprintf(&b, "    %-30s  %s\n", model.Name, model.ID)
 		}
 		return writeOutput(b.String())
 	},
@@ -57,7 +61,7 @@ func getAPIKeyForCommand() (string, error) {
 	}
 
 	if len(cfg.Accounts) == 0 {
-		return "", fmt.Errorf("请先添加账号: opencode-usage account add")
+		return "", fmt.Errorf("no accounts configured. Run 'opencode-usage account add' first")
 	}
 
 	names := make([]string, 0, len(cfg.Accounts))

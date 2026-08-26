@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -17,44 +19,45 @@ type authConfig struct {
 var currentCmd = &cobra.Command{
 	Use:     "current",
 	Aliases: []string{"cc"},
-	Short:   "显示当前opencode配置的账号",
+	Short:   "Show current opencode configuration",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return fmt.Errorf("获取用户主目录失败: %w", err)
+			return fmt.Errorf("failed to get home directory: %w", err)
 		}
-		authPath := homeDir + "/.local/share/opencode/auth.json"
+		authPath := filepath.Join(homeDir, ".local", "share", "opencode", "auth.json")
 
 		if _, err := os.Stat(authPath); os.IsNotExist(err) {
-			fmt.Println("未找到opencode配置文件")
-			return nil
+			return writeOutput("  No opencode configuration found.\n  Run 'opencode-usage account add' to get started.\n")
 		}
 
 		data, err := os.ReadFile(authPath)
 		if err != nil {
-			return fmt.Errorf("读取配置文件失败: %w", err)
+			return fmt.Errorf("failed to read config: %w", err)
 		}
 
 		var authCfg authConfig
 		if err := json.Unmarshal(data, &authCfg); err != nil {
-			return fmt.Errorf("解析配置文件失败: %w", err)
+			return fmt.Errorf("failed to parse config: %w", err)
 		}
 
-		fmt.Println("当前opencode配置:")
+		var out strings.Builder
+		fmt.Fprintln(&out)
+		fmt.Fprintln(&out, "  Current opencode configuration:")
+		fmt.Fprintln(&out)
 		if authCfg.Provider != "" {
-			fmt.Printf("  Provider: %s\n", authCfg.Provider)
+			fmt.Fprintf(&out, "    Provider: %s\n", authCfg.Provider)
 		} else {
-			fmt.Println("  Provider: opencode-go")
+			fmt.Fprintln(&out, "    Provider: opencode-go")
 		}
 		if authCfg.BaseURL != "" {
-			fmt.Printf("  Base URL: %s\n", authCfg.BaseURL)
+			fmt.Fprintf(&out, "    Base URL: %s\n", authCfg.BaseURL)
 		}
 		if authCfg.Token != "" {
-			masked := "..." + authCfg.Token[len(authCfg.Token)-min(6, len(authCfg.Token)):]
-			fmt.Printf("  Token: %s\n", masked)
+			fmt.Fprintln(&out, "    Token:    ***")
 		}
 
-		return nil
+		return writeOutput(out.String())
 	},
 }
 

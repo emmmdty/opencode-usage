@@ -3,123 +3,178 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/emmmdty/opencode-usage/internal/auth"
+	"github.com/emmmdty/opencode-usage/internal/client"
+	"github.com/emmmdty/opencode-usage/internal/config"
+	"github.com/emmmdty/opencode-usage/internal/models"
+	"github.com/emmmdty/opencode-usage/internal/tui"
 	"github.com/spf13/cobra"
-	"github.com/opencode-usage/internal/auth"
-	"github.com/opencode-usage/internal/client"
-	"github.com/opencode-usage/internal/config"
-	"github.com/opencode-usage/internal/models"
-	"github.com/opencode-usage/internal/tui"
+	"golang.org/x/term"
 )
 
 type accountResult struct {
-	Name  string        `json:"name"`
-	Usage *models.Usage `json:"quota"`
-	Error string        `json:"error,omitempty"`
+	Name      string        `json:"name"`
+	Usage     *models.Usage `json:"quota,omitempty"`
+	Error     string        `json:"error,omitempty"`
+	IsCurrent bool          `json:"is_current,omitempty"`
+}
+
+type quotaResponse struct {
+	Version  string          `json:"version"`
+	Accounts []accountResult `json:"accounts"`
 }
 
 var quotaCmd = &cobra.Command{
 	Use:     "quota",
 	Aliases: []string{"q"},
-	Short:   "查看配额使用情况",
+	Short:   "View quota usage",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		configPath, err := getConfigPath()
-		if err != nil {
-			return err
-		}
+		return runQuotaOverview(account, jsonOutput, outputFile)
+	},
+}
 
-		cfg, err := config.LoadOrCreateConfig(configPath)
-		if err != nil {
-			return err
-		}
-		configureAuthFromConfig(cfg)
+func runQuotaOverview(accountFilter string, jsonOut bool, outPath string) error {
+	configPath, err := getConfigPath()
+	if err != nil {
+		return err
+	}
 
-		accountsToQuery := make(map[string]config.Account)
-		if account != "" {
-			if acc, exists := cfg.Accounts[account]; exists {
-				accountsToQuery[account] = acc
-			} else {
-				return fmt.Errorf("账号 '%s' 不存在", account)
-			}
+	cfg, err := config.LoadOrCreateConfig(configPath)
+	if err != nil {
+		return err
+	}
+	configureAuthFromConfig(cfg)
+
+	accountsToQuery := make(map[string]config.Account)
+	if accountFilter != "" {
+		if acc, exists := cfg.Accounts[accountFilter]; exists {
+			accountsToQuery[accountFilter] = acc
 		} else {
-			accountsToQuery = cfg.Accounts
+			return fmt.Errorf("account '%s' not found", accountFilter)
 		}
+	} else {
+		accountsToQuery = cfg.Accounts
+	}
 
-		if len(accountsToQuery) == 0 {
-			return writeOutput("暂无配置的账号，请先运行 'opencode-usage account add' 添加账号\n")
+	if len(accountsToQuery) == 0 {
+		if jsonOut {
+			resp := quotaResponse{Version: "1", Accounts: []accountResult{}}
+			return printJSON(resp)
 		}
+		return writeOutput("  No accounts configured. Run 'opencode-usage account add' to get started.\n")
+	}
 
-		maxConcurrent := cfg.MaxConcurrentRequests
-		if maxConcurrent <= 0 {
-			maxConcurrent = 5
-		}
-		sem := make(chan struct{}, maxConcurrent)
+	currentAccount := resolveCurrentAccount(cfg)
 
-		var wg sync.WaitGroup
-		results := make(chan struct {
-			name  string
-			usage *models.Usage
-			err   error
-		}, len(accountsToQuery))
+	if !jsonOut && !term.IsTerminal(int(os.Stdout.Fd())) {
+		// non-TTY: skip spinner
+	} else if !jsonOut {
+		fmt.Fprintf(os.Stderr, "  Fetching %d accounts...\r", len(accountsToQuery))
+	}
 
-		for name := range accountsToQuery {
-			wg.Add(1)
-			sem <- struct{}{} // acquire semaphore slot
-			go func(name string) {
-				defer wg.Done()
-				defer func() { <-sem }() // release semaphore slot
+	maxConcurrent := cfg.MaxConcurrentRequests
+	if maxConcurrent <= 0 {
+		maxConcurrent = 5
+	}
+	sem := make(chan struct{}, maxConcurrent)
 
-				apiKey, err := auth.GetAPIKey("opencode-usage", name)
-				if err != nil {
-					results <- struct {
-						name  string
-						usage *models.Usage
-						err   error
-					}{name, nil, err}
-					return
-				}
+	var wg sync.WaitGroup
+	results := make(chan struct {
+		name  string
+		usage *models.Usage
+		err   error
+	}, len(accountsToQuery))
 
-				c := client.NewClient(apiKey, "")
-				usage, err := c.GetUsage()
+	for name := range accountsToQuery {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(name string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			apiKey, err := auth.GetAPIKey("opencode-usage", name)
+			if err != nil {
 				results <- struct {
 					name  string
 					usage *models.Usage
 					err   error
-				}{name, usage, err}
-			}(name)
-		}
-
-		wg.Wait()
-		close(results)
-
-		var accountResults []accountResult
-		for result := range results {
-			if result.err != nil {
-				accountResults = append(accountResults, accountResult{
-					Name:  result.name,
-					Error: result.err.Error(),
-				})
-			} else {
-				accountResults = append(accountResults, accountResult{
-					Name:  result.name,
-					Usage: result.usage,
-				})
+				}{name, nil, err}
+				return
 			}
+
+			c := client.NewClient(apiKey, "")
+			usage, err := c.GetUsage()
+			results <- struct {
+				name  string
+				usage *models.Usage
+				err   error
+			}{name, usage, err}
+		}(name)
+	}
+
+	wg.Wait()
+	close(results)
+
+	var accountResults []accountResult
+	for result := range results {
+		ar := accountResult{
+			Name:      result.name,
+			IsCurrent: result.name == currentAccount,
 		}
-
-		sort.Slice(accountResults, func(i, j int) bool {
-			return accountResults[i].Name < accountResults[j].Name
-		})
-
-		if jsonOutput {
-			return printJSON(accountResults)
+		if result.err != nil {
+			ar.Error = result.err.Error()
+		} else {
+			ar.Usage = result.usage
 		}
+		accountResults = append(accountResults, ar)
+	}
 
-		return printQuotaTable(accountResults)
-	},
+	sort.Slice(accountResults, func(i, j int) bool {
+		return accountResults[i].Name < accountResults[j].Name
+	})
+
+	if jsonOut {
+		resp := quotaResponse{Version: "1", Accounts: accountResults}
+		return printJSON(resp)
+	}
+
+	return printQuotaTable(accountResults, cfg, currentAccount)
+}
+
+func resolveCurrentAccount(cfg *config.Config) string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	authPath := homeDir + "/.local/share/opencode/auth.json"
+
+	data, err := os.ReadFile(authPath)
+	if err != nil {
+		return ""
+	}
+
+	var authCfg struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(data, &authCfg); err != nil {
+		return ""
+	}
+	if authCfg.Token == "" {
+		return ""
+	}
+
+	tokenKeyID := auth.ExtractKeyID(authCfg.Token)
+	for name, acc := range cfg.Accounts {
+		if acc.KeyID == tokenKeyID {
+			return name
+		}
+	}
+	return ""
 }
 
 func printJSON(data interface{}) error {
@@ -132,27 +187,29 @@ func printJSON(data interface{}) error {
 	return writeOutput(buf.String())
 }
 
-func printQuotaTable(results []accountResult) error {
+func printQuotaTable(results []accountResult, cfg *config.Config, currentAccount string) error {
 	tuiResults := make([]tui.AccountResult, len(results))
 	for i, r := range results {
 		tuiResults[i] = tui.AccountResult{
-			Name:  r.Name,
-			Usage: r.Usage,
-			Error: r.Error,
+			Name:      r.Name,
+			Usage:     r.Usage,
+			Error:     r.Error,
+			IsCurrent: r.IsCurrent,
 		}
 	}
 
-	configPath, err := getConfigPath()
-	if err != nil {
-		return err
+	style := tui.QuotaStyle{
+		WarningThreshold: cfg.ColorThresholds.Warning,
+		DangerThreshold:  cfg.ColorThresholds.Danger,
+	}
+	if style.WarningThreshold == 0 {
+		style.WarningThreshold = 50
+	}
+	if style.DangerThreshold == 0 {
+		style.DangerThreshold = 80
 	}
 
-	cfg, err := config.LoadOrCreateConfig(configPath)
-	if err != nil {
-		return err
-	}
-
-	output := tui.FormatQuotaTable(tuiResults, cfg.ColorThresholds.Warning, cfg.ColorThresholds.Danger)
+	output := tui.FormatQuotaOverview(tuiResults, style, currentAccount)
 	return writeOutput(output)
 }
 

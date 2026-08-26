@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/opencode-usage/internal/models"
+	"github.com/emmmdty/opencode-usage/internal/models"
 )
 
 type Client struct {
