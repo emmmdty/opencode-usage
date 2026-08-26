@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+# Only the latest run per branch/PR is kept; older queued runs are cancelled
+# so GitHub Actions concurrency limits are not hit by stale runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Lint
@@ -33,6 +39,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -49,25 +56,10 @@ jobs:
           OPENCODE_USAGE_MASTER_PASSWORD: ci-test-master-password
         run: go test -v -race -count=1 ./...
 
-  build-matrix:
-    name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-          - goos: windows
-            goarch: amd64
-          - goos: windows
-            goarch: arm64
+  build:
+    name: Build (all platforms)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -76,8 +68,11 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Build
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-        run: go build -v ./...
+      - name: Cross-compile
+        run: |
+          for goos in linux darwin windows; do
+            for goarch in amd64 arm64; do
+              echo "Building ${goos}/${goarch}..."
+              GOOS=$goos GOARCH=$goarch go build -v ./...
+            done
+          done
