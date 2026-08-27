@@ -5,9 +5,10 @@ OpenCode Go plan usage query tool — query usage, available models, and quota i
 ## Features
 
 - **Multi-account management** — Add, remove, list, export, and import multiple OpenCode Go accounts
+- **Account switching** — Switch active opencode-go account with interactive menu or direct selection
 - **Quota monitoring** — View 5-hour rolling, weekly, and monthly usage across all accounts
 - **Model listing** — See available models for your plan
-- **Current config** — Display the active opencode configuration
+- **Current config** — Display the active opencode configuration with provider details
 - **Diagnostics** — Run `doctor` to check configuration and connectivity
 - **Shell aliases** — Install/uninstall the `ou` shortcut
 - **JSON output** — Machine-readable output with `--json`
@@ -19,13 +20,13 @@ OpenCode Go plan usage query tool — query usage, available models, and quota i
 ### Go install
 
 ```bash
-go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@v0.2.5
+go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@v0.2.6
 ```
 
 Requires Go 1.26.6+. If `~/go/bin` is not in your PATH, use:
 
 ```bash
-GOBIN=~/.local/bin go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@v0.2.5
+GOBIN=~/.local/bin go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@v0.2.6
 ```
 
 ### Download binary
@@ -60,8 +61,20 @@ ou
 # Add an account (interactive prompt)
 opencode-usage account add
 
-# List all accounts
+# List all accounts (-> marks the current one)
 opencode-usage account list
+
+# Switch active account (interactive menu)
+opencode-usage account switch
+
+# Switch to a specific account
+opencode-usage account switch work
+
+# Switch and copy key to clipboard for easy pasting
+opencode-usage account switch --clipboard
+
+# Clear clipboard after pasting
+opencode-usage account clear-clipboard
 
 # Remove an account
 opencode-usage account remove <name>
@@ -140,6 +153,8 @@ opencode-usage update
 | `account remove` | `ar` |
 | `account export` | `ae` |
 | `account import` | `ai` |
+| `account switch` | `sw` |
+| `account clear-clipboard` | `clc` |
 | `quota` | `q` |
 | `models` | `m` |
 | `current` | `cc` |

@@ -5,15 +5,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
+	"github.com/emmmdty/opencode-usage/internal/auth"
+	"github.com/emmmdty/opencode-usage/internal/config"
 	"github.com/spf13/cobra"
 )
 
-type authConfig struct {
-	Provider string `json:"provider"`
-	Token    string `json:"token"`
-	BaseURL  string `json:"base_url"`
+type authProvider struct {
+	Type    string `json:"type"`
+	Key     string `json:"key,omitempty"`
+	Refresh string `json:"refresh,omitempty"`
+	Access  string `json:"access,omitempty"`
+	Expires int    `json:"expires"`
 }
 
 var currentCmd = &cobra.Command{
@@ -36,25 +41,58 @@ var currentCmd = &cobra.Command{
 			return fmt.Errorf("failed to read config: %w", err)
 		}
 
-		var authCfg authConfig
-		if err := json.Unmarshal(data, &authCfg); err != nil {
+		var providers map[string]authProvider
+		if err := json.Unmarshal(data, &providers); err != nil {
 			return fmt.Errorf("failed to parse config: %w", err)
+		}
+
+		configPath, cfgErr := getConfigPath()
+		var cfg *config.Config
+		if cfgErr == nil {
+			cfg, _ = config.LoadOrCreateConfig(configPath)
+			if cfg != nil {
+				configureAuthFromConfig(cfg)
+			}
 		}
 
 		var out strings.Builder
 		fmt.Fprintln(&out)
-		fmt.Fprintln(&out, "  Current opencode configuration:")
-		fmt.Fprintln(&out)
-		if authCfg.Provider != "" {
-			fmt.Fprintf(&out, "    Provider: %s\n", authCfg.Provider)
-		} else {
-			fmt.Fprintln(&out, "    Provider: opencode-go")
+
+		names := make([]string, 0, len(providers))
+		for name := range providers {
+			names = append(names, name)
 		}
-		if authCfg.BaseURL != "" {
-			fmt.Fprintf(&out, "    Base URL: %s\n", authCfg.BaseURL)
-		}
-		if authCfg.Token != "" {
-			fmt.Fprintln(&out, "    Token:    ***")
+		sort.Strings(names)
+
+		for _, name := range names {
+			p := providers[name]
+			marker := "  "
+			if name == "opencode-go" {
+				marker = "-> "
+			}
+
+			fmt.Fprintf(&out, "  %s%s\n", marker, name)
+
+			if p.Type != "" {
+				fmt.Fprintf(&out, "       Type: %s\n", p.Type)
+			}
+
+			if name == "opencode-go" && p.Key != "" {
+				keyID := auth.ExtractKeyID(p.Key)
+				fmt.Fprintf(&out, "       Key:  sk-...%s\n", keyID)
+
+				if cfg != nil {
+					for accountName, acc := range cfg.Accounts {
+						if acc.KeyID == keyID {
+							fmt.Fprintf(&out, "       Account: %s\n", accountName)
+							break
+						}
+					}
+				}
+			} else 			if p.Key != "" {
+				fmt.Fprintf(&out, "       Key:  sk-...%s\n", auth.ExtractKeyID(p.Key))
+			}
+			fmt.Fprintln(&out)
 		}
 
 		return writeOutput(out.String())

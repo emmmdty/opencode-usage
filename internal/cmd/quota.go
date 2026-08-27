@@ -171,17 +171,20 @@ func resolveCurrentAccount(cfg *config.Config) string {
 		return ""
 	}
 
-	var authCfg struct {
-		Token string `json:"token"`
+	var authProviders map[string]struct {
+		Type string `json:"type"`
+		Key  string `json:"key"`
 	}
-	if err := json.Unmarshal(data, &authCfg); err != nil {
-		return ""
-	}
-	if authCfg.Token == "" {
+	if err := json.Unmarshal(data, &authProviders); err != nil {
 		return ""
 	}
 
-	tokenKeyID := auth.ExtractKeyID(authCfg.Token)
+	provider, ok := authProviders["opencode-go"]
+	if !ok || provider.Key == "" {
+		return ""
+	}
+
+	tokenKeyID := auth.ExtractKeyID(provider.Key)
 	for name, acc := range cfg.Accounts {
 		if acc.KeyID == tokenKeyID {
 			return name

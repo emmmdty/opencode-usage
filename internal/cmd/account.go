@@ -5,7 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -396,11 +400,241 @@ var accountImportCmd = &cobra.Command{
 	},
 }
 
+func readAuthJSON() (map[string]authProvider, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	}
+	authPath := filepath.Join(homeDir, ".local", "share", "opencode", "auth.json")
+
+	data, err := os.ReadFile(authPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read auth.json: %w", err)
+	}
+
+	var providers map[string]authProvider
+	if err := json.Unmarshal(data, &providers); err != nil {
+		return nil, fmt.Errorf("failed to parse auth.json: %w", err)
+	}
+	return providers, nil
+}
+
+func writeAuthJSON(providers map[string]authProvider) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %w", err)
+	}
+	authDir := filepath.Join(homeDir, ".local", "share", "opencode")
+	authPath := filepath.Join(authDir, "auth.json")
+
+	if err := os.MkdirAll(authDir, 0700); err != nil {
+		return fmt.Errorf("failed to create auth directory: %w", err)
+	}
+
+	data, err := json.MarshalIndent(providers, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal auth.json: %w", err)
+	}
+
+	tmpFile, err := os.CreateTemp(authDir, "auth.json.tmp.*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to sync temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	if err := os.Chmod(tmpPath, 0600); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to set permissions: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, authPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to replace auth.json: %w", err)
+	}
+
+	return nil
+}
+
+var switchClipboard bool
+
+var accountSwitchCmd = &cobra.Command{
+	Use:     "switch [account-name]",
+	Aliases: []string{"sw"},
+	Short:   "Switch active opencode-go account",
+	Long: `Switch the opencode-go API key used by opencode.
+
+Without arguments, shows an interactive numbered menu to select an account.
+With an argument, switches directly to the named account.
+
+The switch updates ~/.local/share/opencode/auth.json. You still need to
+run /connect in opencode for the change to take effect (opencode does not
+hot-reload auth.json).
+
+Use --clipboard to copy the API key to the system clipboard for easy
+pasting during /connect. Clear the clipboard afterwards with:
+  ou account clear-clipboard`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		configPath, err := getConfigPath()
+		if err != nil {
+			return err
+		}
+
+		cfg, err := config.LoadOrCreateConfig(configPath)
+		if err != nil {
+			return err
+		}
+		configureAuthFromConfig(cfg)
+
+		if len(cfg.Accounts) == 0 {
+			return fmt.Errorf("no accounts configured. Run 'opencode-usage account add' to get started")
+		}
+
+		names := make([]string, 0, len(cfg.Accounts))
+		for name := range cfg.Accounts {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+
+		var targetName string
+
+		if len(args) == 1 {
+			targetName = args[0]
+			if _, exists := cfg.Accounts[targetName]; !exists {
+				return fmt.Errorf("account '%s' not found", targetName)
+			}
+		} else {
+			currentAccount := resolveCurrentAccount(cfg)
+
+			fmt.Println()
+			fmt.Println("  Available accounts:")
+			fmt.Println()
+			for i, name := range names {
+				marker := "  "
+				if name == currentAccount {
+					marker = "-> "
+				}
+				keyID := "sk-..." + cfg.Accounts[name].KeyID
+				fmt.Printf("  %s%d) %-30s %s\n", marker, i+1, name, keyID)
+			}
+			fmt.Println()
+
+			fmt.Print("  Select account [number]: ")
+			reader := bufio.NewReader(os.Stdin)
+			input, err := reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("failed to read input: %w", err)
+			}
+			input = strings.TrimSpace(input)
+
+			var idx int
+			if idx, err = strconv.Atoi(input); err != nil || idx < 1 || idx > len(names) {
+				return fmt.Errorf("invalid selection: %s", input)
+			}
+			targetName = names[idx-1]
+		}
+
+		apiKey, err := auth.GetAPIKey("opencode-usage", targetName)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve API key for '%s': %w", targetName, err)
+		}
+
+		providers, err := readAuthJSON()
+		if err != nil {
+			return err
+		}
+
+		providers["opencode-go"] = authProvider{
+			Type: "api",
+			Key:  apiKey,
+		}
+
+		if err := writeAuthJSON(providers); err != nil {
+			return err
+		}
+
+		keyID := auth.ExtractKeyID(apiKey)
+		fmt.Printf("\n  Switched to account: %s (sk-...%s)\n", targetName, keyID)
+
+		if switchClipboard {
+			if err := copyToClipboard(apiKey); err != nil {
+				fmt.Printf("  Could not copy key to clipboard: %v\n", err)
+				fmt.Println("  Run /connect in opencode and enter the key manually.")
+			} else {
+				fmt.Println("  API key copied to clipboard!")
+				fmt.Println("  Run /connect in opencode, then Ctrl+V to paste.")
+				fmt.Println("  WARNING: Clear your clipboard after use (e.g. run 'ou account clear-clipboard').")
+			}
+		} else {
+			fmt.Println("  Run /connect in opencode to apply the change.")
+			fmt.Println("  Tip: use --clipboard to copy the key for easy pasting.")
+		}
+		fmt.Println()
+
+		return nil
+	},
+}
+
+func copyToClipboard(text string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("pbcopy")
+	case "linux":
+		if _, err := exec.LookPath("xclip"); err == nil {
+			cmd = exec.Command("xclip", "-selection", "clipboard")
+		} else if _, err := exec.LookPath("xsel"); err == nil {
+			cmd = exec.Command("xsel", "--clipboard", "--input")
+		} else if _, err := exec.LookPath("clip.exe"); err == nil {
+			cmd = exec.Command("clip.exe")
+		} else {
+			return fmt.Errorf("no clipboard tool found (install xclip, xsel, or run in WSL)")
+		}
+	case "windows":
+		cmd = exec.Command("clip")
+	default:
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+	cmd.Stdin = strings.NewReader(text)
+	return cmd.Run()
+}
+
+var clearClipboardCmd = &cobra.Command{
+	Use:     "clear-clipboard",
+	Aliases: []string{"clc"},
+	Short:   "Clear the system clipboard",
+	Long:    "Clear the system clipboard to remove any API key that was copied by 'account switch --clipboard'.",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := copyToClipboard(""); err != nil {
+			return fmt.Errorf("failed to clear clipboard: %w", err)
+		}
+		fmt.Println("  Clipboard cleared.")
+		return nil
+	},
+}
+
 func init() {
+	accountSwitchCmd.Flags().BoolVarP(&switchClipboard, "clipboard", "c", false, "copy API key to clipboard after switching")
 	accountCmd.AddCommand(accountAddCmd)
 	accountCmd.AddCommand(accountListCmd)
 	accountCmd.AddCommand(accountRemoveCmd)
 	accountCmd.AddCommand(accountExportCmd)
 	accountCmd.AddCommand(accountImportCmd)
+	accountCmd.AddCommand(accountSwitchCmd)
+	accountCmd.AddCommand(clearClipboardCmd)
 	rootCmd.AddCommand(accountCmd)
 }
