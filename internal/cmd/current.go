@@ -89,7 +89,7 @@ var currentCmd = &cobra.Command{
 						}
 					}
 				}
-			} else 			if p.Key != "" {
+			} else if p.Key != "" {
 				fmt.Fprintf(&out, "       Key:  sk-...%s\n", auth.ExtractKeyID(p.Key))
 			}
 			fmt.Fprintln(&out)
