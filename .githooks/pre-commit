@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# Pre-commit hook: run gofmt and go vet before allowing a commit.
+# Install: chmod +x .git/hooks/pre-commit
+#         git config core.hooksPath .git/hooks
+#
+
+set -e
+
+echo "Running gofmt check..."
+
+# Check formatting - fail if any files need formatting
+UNFORMATTED=$(gofmt -l .)
+if [ -n "$UNFORMATTED" ]; then
+    echo "ERROR: The following files are not formatted:"
+    echo "$UNFORMATTED"
+    echo ""
+    echo "Run 'gofmt -w .' to fix formatting before committing."
+    exit 1
+fi
+
+echo "Running go vet..."
+go vet ./...
+
+echo "Pre-commit checks passed."
