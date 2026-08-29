@@ -30,11 +30,12 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "opencode-usage",
+	Use:     "opencode-usage [provider]",
 	Aliases: []string{"ou"},
-	Short:   "OpenCode Go plan usage query tool",
-	Long:    "Query OpenCode Go plan usage across multiple accounts, view available models and quota information.",
+	Short:   "Multi-provider AI coding tool usage monitor",
+	Long:    "Monitor usage across OpenCode, Claude, Codex, and Volcengine providers.",
 	Version: version.Version,
+	Args:    cobra.MaximumNArgs(1),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if noColor || os.Getenv("NO_COLOR") != "" {
 			lipgloss.SetColorProfile(termenv.Ascii)
@@ -46,7 +47,11 @@ var rootCmd = &cobra.Command{
 		}
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runQuotaOverview(account, jsonOutput, outputFile)
+		providerFilter := ""
+		if len(args) > 0 {
+			providerFilter = args[0]
+		}
+		return runProvidersOverview(providerFilter, jsonOutput, outputFile)
 	},
 	SilenceUsage:  true,
 	SilenceErrors: true,

@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
+	"github.com/emmmdty/opencode-usage/internal/auth"
 	"github.com/emmmdty/opencode-usage/internal/config"
 	"github.com/emmmdty/opencode-usage/internal/models"
 	"github.com/emmmdty/opencode-usage/internal/provider"
@@ -29,15 +31,20 @@ type providersResponse struct {
 }
 
 var providersCmd = &cobra.Command{
-	Use:     "providers",
+	Use:     "providers [provider]",
 	Aliases: []string{"p"},
 	Short:   "View usage across all providers (OpenCode, Claude, Codex, Volcengine)",
+	Args:    cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runProvidersOverview(jsonOutput, outputFile)
+		providerFilter := ""
+		if len(args) > 0 {
+			providerFilter = args[0]
+		}
+		return runProvidersOverview(providerFilter, jsonOutput, outputFile)
 	},
 }
 
-func runProvidersOverview(jsonOut bool, outPath string) error {
+func runProvidersOverview(providerFilter string, jsonOut bool, outPath string) error {
 	configPath, err := getConfigPath()
 	if err != nil {
 		return err
@@ -48,13 +55,28 @@ func runProvidersOverview(jsonOut bool, outPath string) error {
 		return err
 	}
 
-	providers := buildProviders(cfg)
+	// 构建所有 provider（包括 OpenCode accounts）
+	providers := buildAllProviders(cfg)
 	if len(providers) == 0 {
 		if jsonOut {
 			resp := providersResponse{Version: "1", Providers: []providerResult{}}
 			return printJSON(resp)
 		}
-		return writeOutput("  No providers configured. Check ~/.config/opencode-usage/config.yaml\n")
+		return writeOutput("  No providers configured. Run 'opencode-usage account add' or check ~/.config/opencode-usage/config.yaml\n")
+	}
+
+	// 过滤特定 provider
+	if providerFilter != "" {
+		filtered := make(map[string]provider.Provider)
+		for name, p := range providers {
+			if name == providerFilter || strings.HasPrefix(name, providerFilter+":") {
+				filtered[name] = p
+			}
+		}
+		if len(filtered) == 0 {
+			return fmt.Errorf("provider '%s' not found or not configured", providerFilter)
+		}
+		providers = filtered
 	}
 
 	if !jsonOut && !term.IsTerminal(int(os.Stdout.Fd())) {
@@ -122,13 +144,17 @@ func runProvidersOverview(jsonOut bool, outPath string) error {
 	return printProvidersTable(providerResults, cfg)
 }
 
-func buildProviders(cfg *config.Config) map[string]provider.Provider {
+// buildAllProviders 构建所有 provider（包括 OpenCode accounts）
+func buildAllProviders(cfg *config.Config) map[string]provider.Provider {
 	providers := make(map[string]provider.Provider)
 	home, _ := os.UserHomeDir()
 
-	// OpenCode - 使用原有的 account 系统
-	for name, acc := range cfg.Accounts {
-		providers["opencode:"+name] = provider.NewOpenCodeProvider(acc.KeyID)
+	// OpenCode accounts - 使用原有的 account 系统
+	for name := range cfg.Accounts {
+		apiKey, err := auth.GetAPIKey("opencode-usage", name)
+		if err == nil && apiKey != "" {
+			providers["opencode:"+name] = provider.NewOpenCodeProvider(apiKey)
+		}
 	}
 
 	// Claude
