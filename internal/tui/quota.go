@@ -78,14 +78,15 @@ func formatTable(results []AccountResult, style QuotaStyle, theme Theme, width i
 
 	b.WriteString(theme.Title.Render("  OpenCode Go  ") + theme.Muted.Render(fmt.Sprintf("refreshed %s", time.Now().Format("15:04:05"))) + "\n\n")
 
+	// 表头与内容对齐
 	header := "  " +
 		lipgloss.PlaceHorizontal(nameWidth, lipgloss.Left, theme.Header.Render("ACCOUNT")) +
 		"  " +
-		lipgloss.PlaceHorizontal(colWidth, lipgloss.Left, theme.Header.Render("5H")) +
+		lipgloss.PlaceHorizontal(colWidth, lipgloss.Center, theme.Header.Render("5H")) +
 		"  " +
-		lipgloss.PlaceHorizontal(colWidth, lipgloss.Left, theme.Header.Render("Weekly")) +
+		lipgloss.PlaceHorizontal(colWidth, lipgloss.Center, theme.Header.Render("Weekly")) +
 		"  " +
-		lipgloss.PlaceHorizontal(colWidth, lipgloss.Left, theme.Header.Render("Monthly")) +
+		lipgloss.PlaceHorizontal(colWidth, lipgloss.Center, theme.Header.Render("Monthly")) +
 		"\n"
 	b.WriteString(header)
 	sepLen := nameWidth + 3*colWidth + 10
