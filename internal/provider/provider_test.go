@@ -23,26 +23,15 @@ func TestClaudeProvider_GetUsage(t *testing.T) {
 			t.Errorf("expected anthropic-beta header, got %s", r.Header.Get("anthropic-beta"))
 		}
 
-		// 设置 rate limit headers
-		w.Header().Set("anthropic-ratelimit-unified-5h-utilization", "0.35")
-		w.Header().Set("anthropic-ratelimit-unified-5h-reset", time.Now().Add(3*time.Hour).Format("1136214245"))
-		w.Header().Set("anthropic-ratelimit-unified-5h-status", "active")
-		w.Header().Set("anthropic-ratelimit-unified-7d-utilization", "0.12")
-		w.Header().Set("anthropic-ratelimit-unified-7d-reset", time.Now().Add(5*24*time.Hour).Format("1136214245"))
-		w.Header().Set("anthropic-ratelimit-unified-status", "allowed")
 		w.Header().Set("Content-Type", "application/json")
-
-		// 返回一个最小响应
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"id":          "test",
-			"type":        "message",
-			"role":        "assistant",
-			"content":     []map[string]interface{}{},
-			"model":       "claude-haiku-4-5-20251001",
-			"stop_reason": "end_turn",
-			"usage": map[string]interface{}{
-				"input_tokens":  1,
-				"output_tokens": 1,
+			"five_hour": map[string]interface{}{
+				"utilization": 35.0,
+				"resets_at":   time.Now().Add(3 * time.Hour).Format(time.RFC3339),
+			},
+			"seven_day": map[string]interface{}{
+				"utilization": 12.0,
+				"resets_at":   time.Now().Add(5 * 24 * time.Hour).Format(time.RFC3339),
 			},
 		})
 	}))
