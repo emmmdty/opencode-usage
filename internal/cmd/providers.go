@@ -55,6 +55,8 @@ func runProvidersOverview(providerFilter string, jsonOut bool, outPath string) e
 		return err
 	}
 
+	configureAuthFromConfig(cfg)
+
 	// 构建所有 provider（包括 OpenCode accounts）
 	providers := buildAllProviders(cfg)
 	if len(providers) == 0 {
@@ -152,9 +154,10 @@ func buildAllProviders(cfg *config.Config) map[string]provider.Provider {
 	// OpenCode accounts - 使用原有的 account 系统
 	for name := range cfg.Accounts {
 		apiKey, err := auth.GetAPIKey("opencode-usage", name)
-		if err == nil && apiKey != "" {
-			providers["opencode:"+name] = provider.NewOpenCodeProvider(apiKey)
+		if err != nil || apiKey == "" {
+			continue
 		}
+		providers["opencode:"+name] = provider.NewOpenCodeProvider(apiKey)
 	}
 
 	// Claude
