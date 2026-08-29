@@ -8,11 +8,12 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-const CurrentVersion = "1"
+const CurrentVersion = "2"
 
 type Config struct {
-	Version         string             `yaml:"version"`
-	Accounts        map[string]Account `yaml:"accounts"`
+	Version         string                    `yaml:"version"`
+	Accounts        map[string]Account        `yaml:"accounts"`
+	Providers       map[string]ProviderConfig `yaml:"providers"`
 	ColorThresholds struct {
 		Warning int `yaml:"warning"`
 		Danger  int `yaml:"danger"`
@@ -28,14 +29,42 @@ type Account struct {
 	LastVerified time.Time `yaml:"last_verified"`
 }
 
+// ProviderConfig 配置各个 provider
+type ProviderConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	APIKey    string `yaml:"api_key,omitempty"`    // OpenCode, Volcengine
+	CredsPath string `yaml:"creds_path,omitempty"` // Claude
+	AuthPath  string `yaml:"auth_path,omitempty"`  // Codex
+	Endpoint  string `yaml:"endpoint,omitempty"`   // 自定义端点
+}
+
 func getDefaultConfig() *Config {
 	cfg := &Config{
 		Version:               CurrentVersion,
 		Accounts:              make(map[string]Account),
+		Providers:             make(map[string]ProviderConfig),
 		MaxConcurrentRequests: 5,
 	}
 	cfg.ColorThresholds.Warning = 50
 	cfg.ColorThresholds.Danger = 80
+
+	// 默认启用的 provider
+	home, _ := os.UserHomeDir()
+	cfg.Providers["opencode"] = ProviderConfig{
+		Enabled: true,
+	}
+	cfg.Providers["claude"] = ProviderConfig{
+		Enabled:   true,
+		CredsPath: filepath.Join(home, ".claude", ".credentials.json"),
+	}
+	cfg.Providers["codex"] = ProviderConfig{
+		Enabled:  true,
+		AuthPath: filepath.Join(home, ".codex", "auth.json"),
+	}
+	cfg.Providers["volcengine"] = ProviderConfig{
+		Enabled: false,
+	}
+
 	return cfg
 }
 
@@ -142,5 +171,13 @@ func migrateConfig(old *Config) *Config {
 		cfg.MaxConcurrentRequests = old.MaxConcurrentRequests
 	}
 	cfg.UseMasterPassword = old.UseMasterPassword
+
+	// 迁移旧的 provider 配置
+	if old.Providers != nil {
+		for k, v := range old.Providers {
+			cfg.Providers[k] = v
+		}
+	}
+
 	return cfg
 }

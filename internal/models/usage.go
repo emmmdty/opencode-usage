@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/emmmdty/opencode-usage/internal/provider"
+)
 
 // QuotaWindow 表示一个配额窗口
 type QuotaWindow struct {
@@ -24,4 +28,25 @@ type Model struct {
 		Input  float64 `json:"input"`
 		Output float64 `json:"output"`
 	} `json:"pricing"`
+}
+
+// FromProviderUsage 将 provider.Usage 转换为 models.Usage
+func FromProviderUsage(p *provider.Usage) *Usage {
+	return &Usage{
+		Rolling: QuotaWindow{
+			Status:   p.Rolling.Status,
+			Percent:  p.Rolling.Percent,
+			ResetsAt: p.Rolling.ResetAt,
+		},
+		Weekly: QuotaWindow{
+			Status:   p.Weekly.Status,
+			Percent:  p.Weekly.Percent,
+			ResetsAt: p.Weekly.ResetAt,
+		},
+		Monthly: QuotaWindow{
+			Status:   p.Monthly.Status,
+			Percent:  p.Monthly.Percent,
+			ResetsAt: p.Monthly.ResetAt,
+		},
+	}
 }
