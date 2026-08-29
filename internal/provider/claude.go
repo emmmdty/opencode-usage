@@ -212,15 +212,35 @@ func (p *ClaudeProvider) loadCachedUsage() *Usage {
 		CachedAt time.Time `json:"cached_at"`
 	}
 	if err := json.Unmarshal(data, &cached); err != nil {
+		p.invalidateCache()
 		return nil
 	}
 
-	// 缓存10分钟内有效
-	if time.Since(cached.CachedAt) > 10*time.Minute {
+	// 验证缓存有效性
+	if cached.Usage == nil {
+		p.invalidateCache()
+		return nil
+	}
+
+	// 检查 resetAt 是否是零值时间（无效数据）
+	if cached.Usage.Rolling.ResetAt.Year() < 2020 || cached.Usage.Weekly.ResetAt.Year() < 2020 {
+		p.invalidateCache()
+		return nil
+	}
+
+	// 缓存5分钟内有效
+	if time.Since(cached.CachedAt) > 5*time.Minute {
 		return nil
 	}
 
 	return cached.Usage
+}
+
+func (p *ClaudeProvider) invalidateCache() {
+	os.Remove(p.getCachePath())
+	p.mu.Lock()
+	p.cache = nil
+	p.mu.Unlock()
 }
 
 func (p *ClaudeProvider) saveCachedUsage(usage *Usage) {
