@@ -51,6 +51,7 @@ func TestClaudeProvider_GetUsage(t *testing.T) {
 	os.WriteFile(credsPath, data, 0600)
 
 	provider := NewClaudeProviderWithEndpoint(credsPath, server.URL)
+	provider.cachePath = filepath.Join(tmpDir, "claude_cache.json")
 	usage, err := provider.GetUsage()
 	if err != nil {
 		t.Fatalf("failed to get usage: %v", err)
@@ -66,6 +67,58 @@ func TestClaudeProvider_GetUsage(t *testing.T) {
 
 	if usage.Weekly.Percent != 12 {
 		t.Errorf("expected weekly percent 12, got %d", usage.Weekly.Percent)
+	}
+}
+
+func TestClaudeProvider_HeaderFallback(t *testing.T) {
+	// 模拟 API 只在响应头里返回 5h/7d 利用率（JSON body 为空），
+	// 用于覆盖 JSON body 缺字段时回退到响应头的逻辑。
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// JSON body 故意只返回 seven_day，不返回 five_hour
+		w.Header().Set("Content-Type", "application/json")
+		// 5h 数据放在响应头里（值为 0~1 小数）
+		w.Header().Set("anthropic-ratelimit-unified-5h-utilization", "0.42")
+		w.Header().Set("anthropic-ratelimit-unified-5h-reset", "1893456000") // 2030-01-01
+		w.Header().Set("anthropic-ratelimit-unified-5h-status", "ok")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"seven_day": map[string]interface{}{
+				"utilization": 12.0,
+				"resets_at":   time.Now().Add(5 * 24 * time.Hour).Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	credsPath := filepath.Join(tmpDir, ".credentials.json")
+	creds := map[string]interface{}{
+		"claudeAiOauth": map[string]interface{}{
+			"accessToken":  "sk-ant-oat01-test-token",
+			"refreshToken": "sk-ant-ort01-test-refresh",
+			"expiresAt":    time.Now().Add(1 * time.Hour).UnixMilli(),
+		},
+	}
+	data, _ := json.Marshal(creds)
+	os.WriteFile(credsPath, data, 0600)
+
+	provider := NewClaudeProviderWithEndpoint(credsPath, server.URL)
+	provider.cachePath = filepath.Join(tmpDir, "claude_cache.json")
+	usage, err := provider.GetUsage()
+	if err != nil {
+		t.Fatalf("failed to get usage: %v", err)
+	}
+
+	// 5h 应来自响应头（0.42 -> 42%）
+	if usage.Rolling.Percent != 42 {
+		t.Errorf("expected rolling percent 42 from header fallback, got %d", usage.Rolling.Percent)
+	}
+	if usage.Rolling.ResetAt.IsZero() {
+		t.Error("expected rolling resetAt to be parsed from header, got zero time")
+	}
+
+	// 7d 应来自 JSON body
+	if usage.Weekly.Percent != 12 {
+		t.Errorf("expected weekly percent 12 from body, got %d", usage.Weekly.Percent)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -17,6 +18,8 @@ type ClaudeProvider struct {
 	endpoint  string
 	cache     *claudeCache
 	mu        sync.RWMutex
+	// cachePath 用于测试隔离；为空时使用默认路径 ~/.config/opencode-usage/claude_cache.json
+	cachePath string
 }
 
 type claudeCache struct {
@@ -119,6 +122,13 @@ func (p *ClaudeProvider) GetUsage() (*Usage, error) {
 	}
 
 	respBody, _ := io.ReadAll(resp.Body)
+
+	// 调试日志：当 OPENCODE_USAGE_DEBUG=1 时保存原始响应（含状态码、响应头、响应体）
+	// 便于排查 API 返回结构变化（不会发起额外请求，仅落盘本次已有的响应）
+	if os.Getenv("OPENCODE_USAGE_DEBUG") != "" {
+		p.dumpRawResponse(resp, respBody)
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API error: HTTP %d - %s", resp.StatusCode, string(respBody))
 	}
@@ -151,6 +161,19 @@ func (p *ClaudeProvider) GetUsage() (*Usage, error) {
 			Status:  "ok",
 			ResetAt: parseClaudeTime(result.SevenDay.ResetsAt),
 		},
+	}
+
+	// Fallback：若 JSON body 缺少 5h/7d 字段（API 结构变更或返回为空），
+	// 退回解析响应头 anthropic-ratelimit-unified-* （旧版 API 在响应头中返回这些值）
+	if usage.Rolling.ResetAt.IsZero() {
+		if w := parseClaudeHeaderWindow(resp.Header, "5h"); w != nil {
+			usage.Rolling = *w
+		}
+	}
+	if usage.Weekly.ResetAt.IsZero() {
+		if w := parseClaudeHeaderWindow(resp.Header, "7d"); w != nil {
+			usage.Weekly = *w
+		}
 	}
 
 	// 缓存结果
@@ -196,7 +219,59 @@ func parseClaudeTime(s string) time.Time {
 	return t
 }
 
+// parseClaudeHeaderWindow 从响应头解析 5h/7d 配额窗口。
+// 旧版 API 把利用率放在 anthropic-ratelimit-unified-{5h|7d}-utilization 头里
+// （值为 0~1 的小数），重置时间放在 -reset 头里（unix 秒/毫秒）。
+// 当 JSON body 没有返回对应字段时用作兜底。
+func parseClaudeHeaderWindow(header http.Header, window string) *QuotaWindow {
+	v := header.Get("anthropic-ratelimit-unified-" + window + "-utilization")
+	if v == "" {
+		return nil
+	}
+	percent, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return nil
+	}
+	resetAt := parseUnixTimestamp(header.Get("anthropic-ratelimit-unified-" + window + "-reset"))
+	status := header.Get("anthropic-ratelimit-unified-" + window + "-status")
+	if status == "" {
+		status = "ok"
+	}
+	return &QuotaWindow{
+		Percent: int(percent * 100),
+		Status:  status,
+		ResetAt: resetAt,
+	}
+}
+
+// dumpRawResponse 把原始响应（状态码 + 响应头 + 响应体）落盘到调试日志文件，
+// 仅在 OPENCODE_USAGE_DEBUG 环境变量非空时启用。文件每次请求会被覆盖。
+func (p *ClaudeProvider) dumpRawResponse(resp *http.Response, body []byte) {
+	logPath := p.getDebugLogPath()
+	var b strings.Builder
+	fmt.Fprintf(&b, "Time: %s\n", time.Now().Format(time.RFC3339))
+	fmt.Fprintf(&b, "Status: %s\n", resp.Status)
+	fmt.Fprintln(&b, "Headers:")
+	for k, vs := range resp.Header {
+		for _, v := range vs {
+			fmt.Fprintf(&b, "  %s: %s\n", k, v)
+		}
+	}
+	fmt.Fprintln(&b, "Body:")
+	b.Write(body)
+	_ = os.MkdirAll(filepath.Dir(logPath), 0700)
+	_ = os.WriteFile(logPath, []byte(b.String()), 0600)
+}
+
+func (p *ClaudeProvider) getDebugLogPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", "opencode-usage", "claude_debug.log")
+}
+
 func (p *ClaudeProvider) getCachePath() string {
+	if p.cachePath != "" {
+		return p.cachePath
+	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".config", "opencode-usage", "claude_cache.json")
 }

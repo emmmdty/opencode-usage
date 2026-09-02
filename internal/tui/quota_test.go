@@ -119,6 +119,7 @@ func TestFormatResetTime(t *testing.T) {
 		{"2 days 3 hours", time.Now().Add(2*24*time.Hour + 3*time.Hour), "2d"},
 		{"30 minutes", time.Now().Add(30 * time.Minute), "m"},
 		{"expired", time.Now().Add(-1 * time.Hour), "expired"},
+		{"zero time shows n/a", time.Time{}, "n/a"},
 	}
 
 	for _, tt := range tests {

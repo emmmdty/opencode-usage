@@ -267,6 +267,11 @@ func formatPercent(percent int, style QuotaStyle, theme Theme) string {
 }
 
 func formatResetTime(resetsAt time.Time) string {
+	// 零值时间表示 API 没有返回该窗口的重置时间（如 Claude/Codex 没有 monthly 限制，
+	// 或 5h 字段缺失）。显示 "n/a" 而不是误导性的 "expired"。
+	if resetsAt.IsZero() {
+		return "n/a"
+	}
 	duration := time.Until(resetsAt)
 	if duration < 0 {
 		return "expired"
