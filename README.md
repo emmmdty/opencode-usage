@@ -1,3 +1,5 @@
+English | [简体中文](README.zh-CN.md)
+
 # token-usage
 
 Multi-provider AI coding tool usage monitor — query quota usage and available models across OpenCode Go, Claude, Codex, Volcano Engine, and user-defined custom coding-plan providers.
@@ -159,6 +161,9 @@ token-usage models
 ```bash
 token-usage doctor
 ```
+
+`doctor` exits non-zero when any check fails (warnings do not affect the
+exit code), so it can be used in scripts and CI.
 
 ### Shell alias
 
