@@ -235,6 +235,9 @@ func TestNilMasterPasswordModeUsesDefault(t *testing.T) {
 
 	setTestSecretsPath(t)
 	resetMasterPasswordCache()
+	// CI exports TOKEN_USAGE_MASTER_PASSWORD globally; the env must be
+	// cleared so this test actually exercises the default-password path.
+	t.Setenv("TOKEN_USAGE_MASTER_PASSWORD", "")
 	SetUseMasterPassword(nil)
 	t.Cleanup(func() { SetUseMasterPassword(nil) })
 
