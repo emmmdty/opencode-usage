@@ -2,7 +2,6 @@ package auth
 
 import (
 	"path/filepath"
-	"sync"
 	"testing"
 )
 
@@ -17,9 +16,10 @@ func TestKeyringOperations(t *testing.T) {
 
 	// Force the encrypted file backend so the test never touches a real
 	// system keyring (macOS Keychain / Windows Credential Manager).
-	origRing := ring
+	origDisabled := keyringDisabled
+	keyringDisabled = true
+	defer func() { keyringDisabled = origDisabled }()
 	ring = nil
-	defer func() { ring = origRing }()
 
 	serviceName := "token-usage-test"
 	accountName := "test-account"
@@ -62,8 +62,6 @@ func setTestSecretsPath(t *testing.T) {
 func resetMasterPasswordCache() {
 	passwordMu.Lock()
 	cachedMasterPassword = ""
-	passwordErr = nil
-	passwordOnce = sync.Once{}
 	passwordMu.Unlock()
 }
 
@@ -75,6 +73,8 @@ func TestExtractKeyID(t *testing.T) {
 		{"sk-ant-1234567890abcdef", "abcdef"},
 		{"sk-test-abcdef123456", "123456"},
 		{"short", "short"},
+		// Multi-byte keys must be cut on rune boundaries, not raw bytes.
+		{"密钥ab密钥cd", "ab密钥cd"},
 	}
 
 	for _, tt := range tests {

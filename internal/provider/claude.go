@@ -153,7 +153,10 @@ func (p *ClaudeProvider) GetUsage() (*Usage, error) {
 		return nil, errors.New(i18n.T("provider.claude.rate_limited"))
 	}
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%s", i18n.T("provider.claude.read_response", err))
+	}
 
 	// 调试日志：当 TOKEN_USAGE_DEBUG=1 时保存原始响应（含状态码、响应头、响应体）
 	// 便于排查 API 返回结构变化（不会发起额外请求，仅落盘本次已有的响应）
@@ -196,15 +199,21 @@ func (p *ClaudeProvider) GetUsage() (*Usage, error) {
 	}
 
 	// Fallback：若 JSON body 缺少 5h/7d 字段（API 结构变更或返回为空），
-	// 退回解析响应头 anthropic-ratelimit-unified-* （旧版 API 在响应头中返回这些值）
+	// 退回解析响应头 anthropic-ratelimit-unified-* （旧版 API 在响应头中返回这些值）。
+	// 利用率为 0 且无重置时间表示"该窗口当前没有活跃会话"（空闲超过窗口时长），
+	// 标记为 idle 状态，让 TUI 显示"空闲"而不是误导性的 0% 或裸 n/a。
 	if usage.Rolling.ResetAt.IsZero() {
 		if w := parseClaudeHeaderWindow(resp.Header, "5h"); w != nil {
 			usage.Rolling = *w
+		} else if result.FiveHour.Utilization == 0 {
+			usage.Rolling.Status = "idle"
 		}
 	}
 	if usage.Weekly.ResetAt.IsZero() {
 		if w := parseClaudeHeaderWindow(resp.Header, "7d"); w != nil {
 			usage.Weekly = *w
+		} else if result.SevenDay.Utilization == 0 {
+			usage.Weekly.Status = "idle"
 		}
 	}
 

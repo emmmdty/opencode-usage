@@ -117,7 +117,12 @@ func zaiGLMQuery(apiKey, baseURL string) (*Usage, error) {
 		Monthly:  QuotaWindow{Status: StatusUnknown},
 	}
 	for _, limit := range out.Data.Limits {
-		pct := rawToPercent(limit.Percentage)
+		pct, ok := rawToPercent(limit.Percentage)
+		if !ok {
+			// A malformed percentage must never render as a healthy 0%;
+			// leave the window unknown (or fail when nothing is usable).
+			continue
+		}
 		window := QuotaWindow{Status: "ok", Percent: pct}
 		switch limit.Type {
 		case "TOKENS_LIMIT":
@@ -134,12 +139,23 @@ func zaiGLMQuery(apiKey, baseURL string) (*Usage, error) {
 	return usage, nil
 }
 
-func rawToPercent(raw json.RawMessage) int {
+// clampPercent confines an unvalidated provider percentage to 0..100.
+func clampPercent(p int) int {
+	if p < 0 {
+		return 0
+	}
+	if p > 100 {
+		return 100
+	}
+	return p
+}
+
+func rawToPercent(raw json.RawMessage) (int, bool) {
 	s := strings.Trim(string(raw), `"`)
 	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return int(f)
+		return int(f), true
 	}
-	return 0
+	return 0, false
 }
 
 // --- Kimi (Moonshot) Coding Plan ---------------------------------------------
@@ -286,9 +302,9 @@ func minimaxQuery(apiKey, baseURL string) (*Usage, error) {
 		pct := 0
 		switch {
 		case m.RemainingPercent != nil:
-			pct = 100 - int(*m.RemainingPercent)
+			pct = clampPercent(100 - int(*m.RemainingPercent))
 		case m.Total != nil && *m.Total > 0 && m.Remaining != nil:
-			pct = int((*m.Total - *m.Remaining) / *m.Total * 100)
+			pct = clampPercent(int((*m.Total - *m.Remaining) / *m.Total * 100))
 		}
 		if pct > worst {
 			worst = pct

@@ -22,6 +22,15 @@ type CodexProvider struct {
 	accessToken string
 }
 
+// codexClientUA mirrors the official Codex CLI user agent. Empirically
+// (verified 2026-09-06 against the live endpoint) wham/usage does NOT gate
+// on User-Agent — empty and curl UAs return 200 with a valid Bearer token,
+// 401 without — so this header is defensive camouflage, not a functional
+// requirement; it is kept so requests blend in with official client traffic
+// in case bot protection tightens. Bump it when the installed codex CLI
+// moves significantly ahead (the test pins this value).
+const codexClientUA = "codex-cli/0.153.4"
+
 func NewCodexProvider(authPath string) *CodexProvider {
 	return &CodexProvider{
 		authPath: authPath,
@@ -106,7 +115,7 @@ func (p *CodexProvider) GetUsage() (*Usage, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "codex-cli/0.58.0")
+	req.Header.Set("User-Agent", codexClientUA)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
@@ -116,7 +125,10 @@ func (p *CodexProvider) GetUsage() (*Usage, error) {
 	defer resp.Body.Close()
 
 	// 读取响应体
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%s", i18n.T("provider.codex.read_response", err))
+	}
 	respStr := string(respBody)
 
 	// 检查是否返回 HTML（通常是认证失败）
@@ -134,18 +146,27 @@ func (p *CodexProvider) GetUsage() (*Usage, error) {
 			PrimaryWindow struct {
 				UsedPercent    float64 `json:"used_percent"`
 				ResetAfterSecs int     `json:"reset_after_seconds"`
-				ResetAt        int64   `json:"reset_at"`
+				ResetAt        *int64  `json:"reset_at"`
 			} `json:"primary_window"`
 			SecondaryWindow struct {
 				UsedPercent    float64 `json:"used_percent"`
 				ResetAfterSecs int     `json:"reset_after_seconds"`
-				ResetAt        int64   `json:"reset_at"`
+				ResetAt        *int64  `json:"reset_at"`
 			} `json:"secondary_window"`
 		} `json:"rate_limit"`
 	}
 
 	if err := json.Unmarshal(respBody, &result); err != nil {
 		return nil, fmt.Errorf("%s", i18n.T("provider.codex.decode_response", err))
+	}
+
+	// A window without reset_at resolves to a zero time (rendered "n/a")
+	// instead of 1970-01-01 (rendered "expired").
+	resetAtOrZero := func(p *int64) time.Time {
+		if p == nil {
+			return time.Time{}
+		}
+		return time.Unix(*p, 0)
 	}
 
 	usage := &Usage{
@@ -156,14 +177,14 @@ func (p *CodexProvider) GetUsage() (*Usage, error) {
 	// Parse 5h window (primary)
 	usage.Rolling = QuotaWindow{
 		Percent: int(result.RateLimit.PrimaryWindow.UsedPercent),
-		ResetAt: time.Unix(result.RateLimit.PrimaryWindow.ResetAt, 0),
+		ResetAt: resetAtOrZero(result.RateLimit.PrimaryWindow.ResetAt),
 		Status:  "ok",
 	}
 
 	// Parse 7d window (secondary)
 	usage.Weekly = QuotaWindow{
 		Percent: int(result.RateLimit.SecondaryWindow.UsedPercent),
-		ResetAt: time.Unix(result.RateLimit.SecondaryWindow.ResetAt, 0),
+		ResetAt: resetAtOrZero(result.RateLimit.SecondaryWindow.ResetAt),
 		Status:  "ok",
 	}
 

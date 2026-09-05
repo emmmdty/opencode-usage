@@ -31,6 +31,18 @@ func countProviders(cfg *config.Config) int {
 	return n
 }
 
+// doctorNetworkProbe is the connectivity check; a variable so tests can
+// stub the network.
+var doctorNetworkProbe = func() error {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("https://opencode.ai/zen/go/v1/usage")
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
+}
+
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Diagnose configuration and connectivity issues",
@@ -78,21 +90,22 @@ quota windows), network reachability, and opencode's auth.json presence.`,
 			checks = append(checks, doctorCheck{name: i18n.T("output.doctor.keyring"), status: "WARN", detail: i18n.T("output.doctor.keyring_warn")})
 		}
 
-		client := &http.Client{Timeout: 5 * time.Second}
-		resp, err := client.Get("https://opencode.ai/zen/go/v1/usage")
-		if err != nil {
+		if doctorNetworkProbe() != nil {
 			checks = append(checks, doctorCheck{name: i18n.T("output.doctor.network"), status: "FAIL", detail: i18n.T("output.doctor.network_fail")})
 		} else {
-			resp.Body.Close()
 			checks = append(checks, doctorCheck{name: i18n.T("output.doctor.network"), status: "OK", detail: i18n.T("output.doctor.network_ok")})
 		}
 
-		homeDir, _ := os.UserHomeDir()
-		authPath := filepath.Join(homeDir, ".local", "share", "opencode", "auth.json")
-		if _, err := os.Stat(authPath); err == nil {
-			checks = append(checks, doctorCheck{name: i18n.T("output.doctor.opencode_auth"), status: "OK", detail: i18n.T("output.doctor.opencode_auth_ok")})
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			checks = append(checks, doctorCheck{name: i18n.T("output.doctor.opencode_auth"), status: "WARN", detail: err.Error()})
 		} else {
-			checks = append(checks, doctorCheck{name: i18n.T("output.doctor.opencode_auth"), status: "WARN", detail: i18n.T("output.doctor.opencode_auth_warn")})
+			authPath := filepath.Join(homeDir, ".local", "share", "opencode", "auth.json")
+			if _, err := os.Stat(authPath); err == nil {
+				checks = append(checks, doctorCheck{name: i18n.T("output.doctor.opencode_auth"), status: "OK", detail: i18n.T("output.doctor.opencode_auth_ok")})
+			} else {
+				checks = append(checks, doctorCheck{name: i18n.T("output.doctor.opencode_auth"), status: "WARN", detail: i18n.T("output.doctor.opencode_auth_warn")})
+			}
 		}
 
 		var out strings.Builder
@@ -108,10 +121,11 @@ quota windows), network reachability, and opencode's auth.json presence.`,
 		}
 
 		allOK := true
+		failCount := 0
 		for _, c := range checks {
 			if c.status == "FAIL" {
 				allOK = false
-				break
+				failCount++
 			}
 		}
 		if allOK {
@@ -119,7 +133,15 @@ quota windows), network reachability, and opencode's auth.json presence.`,
 		} else {
 			fmt.Fprintln(&out, "\n  "+i18n.T("output.doctor.some_failed"))
 		}
-		return writeOutput(out.String())
+		if err := writeOutput(out.String()); err != nil {
+			return err
+		}
+		// Surface failures through the exit code so scripts and CI can act
+		// on the verdict (warnings deliberately do not fail).
+		if failCount > 0 {
+			return fmt.Errorf("%s", i18n.T("error.doctor.checks_failed", failCount))
+		}
+		return nil
 	},
 }
 

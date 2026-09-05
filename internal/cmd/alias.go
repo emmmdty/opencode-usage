@@ -4,11 +4,33 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/spf13/cobra"
 )
+
+// goos is a variable so tests can simulate platform-specific behavior.
+var goos = runtime.GOOS
+
+// rcFileFor maps a $SHELL value to the rc file the alias lives in.
+func rcFileFor(shell, home string) string {
+	if strings.Contains(shell, "zsh") {
+		return filepath.Join(home, ".zshrc")
+	}
+	return filepath.Join(home, ".bashrc")
+}
+
+// checkAliasPlatform rejects the alias commands where they cannot do the
+// right thing (no bash/zsh rc-file convention).
+func checkAliasPlatform() error {
+	if goos == "windows" {
+		return fmt.Errorf("%s", i18n.T("error.alias.windows"))
+	}
+	return nil
+}
 
 var aliasCmd = &cobra.Command{
 	Use:   "alias",
@@ -24,18 +46,14 @@ Detects your shell from $SHELL: zsh writes to ~/.zshrc, anything else to
 ~/.bashrc. Re-running replaces an existing 'tu' alias after confirmation.
 Restart your terminal or re-source the rc file afterwards.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := checkAliasPlatform(); err != nil {
+			return err
+		}
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return fmt.Errorf("failed to get home directory: %w", err)
 		}
-
-		shell := os.Getenv("SHELL")
-		var rcFile string
-		if strings.Contains(shell, "zsh") {
-			rcFile = homeDir + "/.zshrc"
-		} else {
-			rcFile = homeDir + "/.bashrc"
-		}
+		rcFile := rcFileFor(os.Getenv("SHELL"), homeDir)
 
 		if aliasExists(rcFile, "tu") {
 			fmt.Printf("%s", i18n.T("output.alias.already_exists", rcFile)+"\n")
@@ -78,18 +96,14 @@ var aliasUninstallCmd = &cobra.Command{
 Detects your shell from $SHELL: zsh writes to ~/.zshrc, anything else to
 ~/.bashrc. Does nothing when the alias is not present.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := checkAliasPlatform(); err != nil {
+			return err
+		}
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return fmt.Errorf("failed to get home directory: %w", err)
 		}
-
-		shell := os.Getenv("SHELL")
-		var rcFile string
-		if strings.Contains(shell, "zsh") {
-			rcFile = homeDir + "/.zshrc"
-		} else {
-			rcFile = homeDir + "/.bashrc"
-		}
+		rcFile := rcFileFor(os.Getenv("SHELL"), homeDir)
 
 		if !aliasExists(rcFile, "tu") {
 			fmt.Printf("%s", i18n.T("output.alias.not_found", rcFile)+"\n")
@@ -136,6 +150,11 @@ func removeAlias(rcFile, alias string) error {
 		return err
 	}
 
+	// Back up the original content before touching a user file.
+	if err := os.WriteFile(rcFile+".tu-bak", data, perm); err != nil {
+		return fmt.Errorf("failed to write backup %s.tu-bak: %w", rcFile, err)
+	}
+
 	// Preserve the original line ending style.
 	newline := "\n"
 	if strings.Contains(string(data), "\r\n") {
@@ -151,7 +170,10 @@ func removeAlias(rcFile, alias string) error {
 	aliasLine := "alias " + alias + "="
 	var result []string
 	for i, line := range lines {
-		if strings.Contains(line, aliasLine) {
+		// Only remove lines this tool installed: the alias must point at
+		// token-usage, so a user's own "alias tu=..." is never touched.
+		isToolAlias := strings.Contains(line, aliasLine) && strings.Contains(line, "token-usage")
+		if isToolAlias {
 			if i > 0 && len(result) > 0 && strings.TrimSpace(result[len(result)-1]) == "# token-usage alias" {
 				result = result[:len(result)-1]
 			}

@@ -184,6 +184,9 @@ func formatCompact(results []AccountResult, style QuotaStyle, theme Theme) strin
 }
 
 func formatPercentCompact(window models.QuotaWindow, style QuotaStyle, theme Theme) string {
+	if window.Status == "idle" {
+		return theme.Muted.Render(i18n.T("tui.idle"))
+	}
 	if window.Status != "ok" {
 		return theme.Muted.Render("n/a")
 	}
@@ -235,8 +238,12 @@ func formatQuotaRow(result AccountResult, nameWidth, colWidth, barWidth int, sty
 
 // windowStatus reports anything that is not a resolved "ok" window
 // (unknown placeholders, empty status from providers without that window)
-// as n/a instead of a misleading 0%.
+// as n/a instead of a misleading 0%. A dedicated "idle" status (the
+// provider has no active usage window right now) gets its own label.
 func formatQuotaCell(window models.QuotaWindow, barWidth int, style QuotaStyle, theme Theme) string {
+	if window.Status == "idle" {
+		return theme.Muted.Render(padRight("  "+i18n.T("tui.idle"), barWidth+13))
+	}
 	if window.Status != "ok" {
 		return theme.Muted.Render(padRight("n/a", barWidth+13))
 	}
@@ -254,8 +261,13 @@ func formatResetTimeFixed(resetsAt time.Time) string {
 
 func renderBar(percent, width int, style QuotaStyle, theme Theme) string {
 	filled := (percent * width) / 100
+	// Provider data is unvalidated; clamp on both sides so a negative or
+	// oversized percent can never reach strings.Repeat with a bad count.
 	if filled > width {
 		filled = width
+	}
+	if filled < 0 {
+		filled = 0
 	}
 	empty := width - filled
 

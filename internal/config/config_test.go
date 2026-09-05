@@ -159,6 +159,181 @@ func TestLanguageFieldDefaultEmpty(t *testing.T) {
 	}
 }
 
+// A config file whose "version" field is missing must never be silently
+// reinterpreted (e.g. as legacy v2) and overwritten — that destroys the
+// user's providers and accounts (regression: data loss).
+func TestLoadOrCreateConfigMissingVersionDoesNotOverwrite(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	original := `providers:
+    opencode:
+        enabled: true
+        default_account: work
+        accounts:
+            work:
+                source: manual
+                key_id: "abc123"
+custom:
+    my-glm:
+        query_type: zai-glm
+        base_url: https://api.z.ai
+        enabled: true
+        accounts:
+            main:
+                source: manual
+`
+	if err := os.WriteFile(configPath, []byte(original), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	if _, err := LoadOrCreateConfig(configPath); err == nil {
+		t.Fatal("expected an error for a config file without a version field")
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to re-read config: %v", err)
+	}
+	if string(data) != original {
+		t.Error("config file must not be modified when its version cannot be determined")
+	}
+}
+
+// An empty (or whitespace-only) config file is treated like a missing
+// version: report it, never overwrite it with defaults behind the user's
+// back.
+func TestLoadOrCreateConfigEmptyFileNotOverwritten(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	if err := os.WriteFile(configPath, []byte("\n"), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	if _, err := LoadOrCreateConfig(configPath); err == nil {
+		t.Fatal("expected an error for an empty config file")
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to re-read config: %v", err)
+	}
+	if string(data) != "\n" {
+		t.Errorf("empty config file must not be overwritten, got %q", string(data))
+	}
+}
+
+// Loading a valid v3 config is a read operation: the file must be left
+// byte-for-byte untouched (a forced rewrite makes read-only configs fail).
+func TestLoadOrCreateConfigV3DoesNotRewriteFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	original := `# hand-tuned config
+version: "3"
+language: zh
+max_concurrent_requests: 7
+providers:
+    opencode:
+        enabled: true
+        accounts:
+            work:
+                source: manual
+                key_id: "abc123"
+`
+	if err := os.WriteFile(configPath, []byte(original), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	cfg, err := LoadOrCreateConfig(configPath)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+	if cfg.Language != "zh" || cfg.MaxConcurrentRequests != 7 {
+		t.Fatalf("unexpected loaded config: %+v", cfg)
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to re-read config: %v", err)
+	}
+	if string(data) != original {
+		t.Error("a valid v3 config file must not be rewritten on load")
+	}
+}
+
+// An explicitly unsupported version must fail without touching the file.
+func TestLoadOrCreateConfigUnsupportedVersionKeepsFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	original := "version: \"1\"\n"
+	if err := os.WriteFile(configPath, []byte(original), 0600); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+
+	if _, err := LoadOrCreateConfig(configPath); err == nil {
+		t.Fatal("expected an error for unsupported version")
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to re-read config: %v", err)
+	}
+	if string(data) != original {
+		t.Error("config file must not be modified for an unsupported version")
+	}
+}
+
+// The default account chosen during v2 migration must be deterministic
+// (previously it depended on Go's randomized map iteration order).
+func TestMigrateV2DefaultAccountDeterministic(t *testing.T) {
+	v2 := `version: "2"
+accounts:
+    alpha:
+        name: alpha
+        key_id: "aaa111"
+    beta:
+        name: beta
+        key_id: "bbb222"
+    gamma:
+        name: gamma
+        key_id: "ccc333"
+`
+	for i := 0; i < 50; i++ {
+		configPath := filepath.Join(t.TempDir(), "config.yaml")
+		if err := os.WriteFile(configPath, []byte(v2), 0600); err != nil {
+			t.Fatalf("failed to write config file: %v", err)
+		}
+		cfg, err := LoadOrCreateConfig(configPath)
+		if err != nil {
+			t.Fatalf("iteration %d: failed to load config: %v", i, err)
+		}
+		if got := cfg.Providers["opencode"].DefaultAccount; got != "alpha" {
+			t.Fatalf("iteration %d: expected deterministic default account 'alpha', got %q", i, got)
+		}
+	}
+}
+
+// keyIDOf cuts the key id on rune boundaries (it is displayed to users and
+// compared against auth.ExtractKeyID, which must agree).
+func TestKeyIDOfRuneSafe(t *testing.T) {
+	tests := []struct {
+		key  string
+		want string
+	}{
+		{"sk-1234567890", "567890"},
+		{"short", "short"},
+		{"密钥ab密钥cd", "ab密钥cd"},
+	}
+	for _, tt := range tests {
+		if got := keyIDOf(tt.key); got != tt.want {
+			t.Errorf("keyIDOf(%q) = %q, want %q", tt.key, got, tt.want)
+		}
+	}
+}
+
 func TestAllAccountsOrder(t *testing.T) {
 	cfg := getDefaultConfig()
 	cfg.Providers["opencode"].Accounts["b"] = Account{Source: SourceManual}

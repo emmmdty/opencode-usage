@@ -10,6 +10,7 @@ import (
 
 	"github.com/emmmdty/token-usage/internal/auth"
 	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/emmmdty/token-usage/internal/provider"
 )
 
@@ -71,7 +72,10 @@ func resolveStoredKey(providerID, account string) (string, error) {
 // resolveLocalKey builds a query closure for "local" source accounts, where
 // credentials live in each tool's own config files.
 func resolveLocalKey(cfg *config.Config, providerID, account string) (func() (*provider.Usage, error), error) {
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve home directory: %w", err)
+	}
 	preset, ok := cfg.Providers[providerID]
 	if !ok {
 		return nil, fmt.Errorf("provider '%s' does not support local credentials", providerID)
@@ -247,6 +251,10 @@ type queryResult struct {
 	Err    error
 }
 
+// queryOverallTimeout bounds a whole quota run: one wedged provider must
+// not hold the entire report hostage. Variable for test injection.
+var queryOverallTimeout = 60 * time.Second
+
 func runQueryTargets(cfg *config.Config, targets []queryTarget) []queryResult {
 	if len(targets) == 0 {
 		return nil
@@ -258,7 +266,17 @@ func runQueryTargets(cfg *config.Config, targets []queryTarget) []queryResult {
 	}
 	sem := make(chan struct{}, maxConcurrent)
 
+	// Each worker reports through its own buffered slot so a goroutine that
+	// finishes after the deadline never blocks or races with the results
+	// slice (its late message is simply absorbed by the buffer).
+	type resultMsg struct {
+		idx int
+		res queryResult
+	}
+	msgs := make(chan resultMsg, len(targets))
+
 	results := make([]queryResult, len(targets))
+	completed := make([]bool, len(targets))
 	var wg sync.WaitGroup
 	for i := range targets {
 		wg.Add(1)
@@ -267,10 +285,29 @@ func runQueryTargets(cfg *config.Config, targets []queryTarget) []queryResult {
 			defer wg.Done()
 			defer func() { <-sem }()
 			usage, err := targets[i].query()
-			results[i] = queryResult{Target: targets[i], Usage: usage, Err: err}
+			msgs <- resultMsg{i, queryResult{Target: targets[i], Usage: usage, Err: err}}
 		}(i)
 	}
-	wg.Wait()
+
+	deadline := time.After(queryOverallTimeout)
+	for done := 0; done < len(targets); {
+		select {
+		case msg := <-msgs:
+			results[msg.idx] = msg.res
+			completed[msg.idx] = true
+			done++
+		case <-deadline:
+			for i := range results {
+				if !completed[i] {
+					results[i] = queryResult{
+						Target: targets[i],
+						Err:    fmt.Errorf("%s", i18n.T("error.query.timeout", queryOverallTimeout)),
+					}
+				}
+			}
+			return results
+		}
+	}
 	return results
 }
 
@@ -302,7 +339,9 @@ func touchLastVerified(cfg *config.Config, providerID, account string, path stri
 			cfg.Custom[providerID] = c
 		}
 	}
-	_ = config.SaveConfig(cfg, path)
+	if err := config.SaveConfig(cfg, path); err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", i18n.T("warning.config.save_failed", err))
+	}
 }
 
 // opencodeAuthPath is where opencode stores the active provider keys.

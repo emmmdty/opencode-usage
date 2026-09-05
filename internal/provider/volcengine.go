@@ -256,10 +256,8 @@ func (p *VolcengineProvider) usageViaProbe() (*Usage, error) {
 			Status:  "ok",
 			Percent: 100 - (remaining*100)/limit,
 		}
-		if reset := resp.Header.Get("X-Ratelimit-Reset-Requests"); reset != "" {
-			// Ark reports an interval; the exact reset time is not exposed.
-			usage.Rolling.ResetAt = time.Time{}
-		}
+		// X-Ratelimit-Reset-Requests reports an interval, not a point in
+		// time, so no ResetAt can be derived from the headers.
 		usage.Note = i18n.T("provider.volcengine.note_rate_limit")
 	} else {
 		usage.Note = i18n.T("provider.volcengine.note_key_valid")

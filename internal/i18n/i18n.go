@@ -74,6 +74,10 @@ func T(key string, args ...any) string {
 		return key
 	}
 	if len(args) > 0 {
+		// Dictionary strings are written like fmt.Errorf templates and may
+		// use %w for wrapped errors, but Sprintf does not understand that
+		// verb — translate it so errors don't render as "%!w(...)".
+		val = strings.ReplaceAll(val, "%w", "%v")
 		return fmt.Sprintf(val, args...)
 	}
 	return val

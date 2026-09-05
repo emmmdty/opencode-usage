@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/emmmdty/token-usage/internal/fsutil"
 	"github.com/emmmdty/token-usage/internal/i18n"
 
 	"errors"
@@ -22,8 +23,6 @@ import (
 
 var (
 	cachedMasterPassword string
-	passwordOnce         sync.Once
-	passwordErr          error
 	useMasterPassword    *bool
 	passwordMu           sync.RWMutex
 )
@@ -61,66 +60,64 @@ func getEncryptedPath() (string, error) {
 	return filepath.Join(homeDir, encryptedDir, encryptedFile), nil
 }
 
-func doInitMasterPassword() {
-	// Try to get from environment variable
-	if pwd := os.Getenv("TOKEN_USAGE_MASTER_PASSWORD"); pwd != "" {
-		passwordMu.Lock()
-		cachedMasterPassword = pwd
-		passwordMu.Unlock()
-		return
-	}
-
-	// Interactive input (masked)
+// doPromptMasterPassword reads the master password interactively. It must
+// be called without passwordMu held.
+func doPromptMasterPassword() (string, error) {
 	fmt.Print(i18n.T("prompt.master_password"))
 	pwd, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Println() // newline after hidden input
 	if err != nil {
-		passwordErr = fmt.Errorf("%s", i18n.T("error.auth.master_password_read", err))
-		return
+		return "", fmt.Errorf("%s", i18n.T("error.auth.master_password_read", err))
 	}
-
 	if len(pwd) == 0 {
-		passwordErr = errors.New(i18n.T("error.auth.master_password_empty"))
-		return
+		return "", errors.New(i18n.T("error.auth.master_password_empty"))
 	}
-
-	passwordMu.Lock()
-	cachedMasterPassword = string(pwd)
-	passwordMu.Unlock()
+	return string(pwd), nil
 }
 
 func getMasterPassword() (string, error) {
+	// The environment variable always wins and is re-checked on every call,
+	// so a password supplied after an earlier interactive failure recovers
+	// instead of being locked out by a cached error.
+	if pwd := os.Getenv("TOKEN_USAGE_MASTER_PASSWORD"); pwd != "" {
+		passwordMu.Lock()
+		cachedMasterPassword = pwd
+		passwordMu.Unlock()
+		return pwd, nil
+	}
+
 	passwordMu.RLock()
 	cached := cachedMasterPassword
-	err := passwordErr
 	passwordMu.RUnlock()
 	if cached != "" {
 		return cached, nil
 	}
+
+	passwordMu.Lock()
+	defer passwordMu.Unlock()
+	// Re-check after taking the write lock: another goroutine may have
+	// cached a password in the meantime.
+	if cachedMasterPassword != "" {
+		return cachedMasterPassword, nil
+	}
+
+	// Master-password mode off (or not yet configured) uses the documented
+	// default instead of prompting — a nil/unset mode must never wedge a
+	// non-interactive session.
+	if useMasterPassword == nil || !*useMasterPassword {
+		cachedMasterPassword = defaultPassword
+		return cachedMasterPassword, nil
+	}
+
+	// Interactive prompt. Failures are deliberately not cached: a later
+	// call (or a newly set TOKEN_USAGE_MASTER_PASSWORD) must be able to
+	// recover.
+	pwd, err := doPromptMasterPassword()
 	if err != nil {
 		return "", err
 	}
-
-	passwordMu.Lock()
-	if cachedMasterPassword == "" && passwordErr == nil {
-		passwordMu.Unlock()
-
-		if useMasterPassword != nil && !*useMasterPassword {
-			passwordMu.Lock()
-			cachedMasterPassword = defaultPassword
-			cached := cachedMasterPassword
-			passwordMu.Unlock()
-			return cached, nil
-		}
-
-		passwordOnce.Do(doInitMasterPassword)
-	}
-
-	passwordMu.RLock()
-	cached = cachedMasterPassword
-	err = passwordErr
-	passwordMu.RUnlock()
-	return cached, err
+	cachedMasterPassword = pwd
+	return pwd, nil
 }
 
 func deriveKey(password string, salt []byte) []byte {
@@ -291,49 +288,7 @@ func saveEncrypted(secrets map[string]string) error {
 		return err
 	}
 
-	return writeFileAtomic(path, []byte(base64.StdEncoding.EncodeToString(encrypted)), 0600)
-}
-
-// writeFileAtomic writes data to path via a temp file in the same directory
-// followed by rename, so a crash mid-write never truncates the target.
-func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
-	}
-
-	tmp, err := os.CreateTemp(dir, ".tmp-"+filepath.Base(path)+"-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-
-	cleanup := func() {
-		tmp.Close()
-		os.Remove(tmpName)
-	}
-
-	if _, err := tmp.Write(data); err != nil {
-		cleanup()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		cleanup()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	if err := os.Chmod(tmpName, perm); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	return nil
+	return fsutil.WriteFileAtomic(path, []byte(base64.StdEncoding.EncodeToString(encrypted)), 0600)
 }
 
 func storeEncrypted(account, apiKey string) error {

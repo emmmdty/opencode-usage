@@ -6,52 +6,64 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/99designs/keyring"
 	"github.com/emmmdty/token-usage/internal/i18n"
 )
 
 var (
+	keyringOnce      sync.Once
 	ring             keyring.Keyring
 	keyringAvailable bool
+	// keyringDisabled lets tests force the encrypted-file backend without
+	// touching a real system keyring.
+	keyringDisabled bool
 )
 
-func init() {
-	homeDir, _ := os.UserHomeDir()
+// ensureKeyring lazily opens the system keyring and probes it with a
+// write/read cycle. Keeping this out of init() makes importing the package
+// side-effect free (important for tests and headless environments).
+func ensureKeyring() {
+	keyringOnce.Do(func() {
+		if keyringDisabled {
+			return
+		}
 
-	cfg := keyring.Config{
-		ServiceName: "token-usage",
-		FilePasswordFunc: func(prompt string) (string, error) {
-			if pwd := os.Getenv("TOKEN_USAGE_KEYRING_PASSWORD"); pwd != "" {
-				return pwd, nil
-			}
-			return "", errors.New(i18n.T("error.auth.keyring_password"))
-		},
-	}
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return
+		}
 
-	if homeDir != "" {
+		cfg := keyring.Config{
+			ServiceName: "token-usage",
+			FilePasswordFunc: func(prompt string) (string, error) {
+				if pwd := os.Getenv("TOKEN_USAGE_KEYRING_PASSWORD"); pwd != "" {
+					return pwd, nil
+				}
+				return "", errors.New(i18n.T("error.auth.keyring_password"))
+			},
+		}
 		cfg.FileDir = filepath.Join(homeDir, ".config", "token-usage", "keyring")
-	}
 
-	var err error
-	ring, err = keyring.Open(cfg)
-	if err != nil {
-		ring = nil
-		keyringAvailable = false
-		return
-	}
+		r, err := keyring.Open(cfg)
+		if err != nil {
+			return
+		}
 
-	testKey := "__token_usage_test__"
-	if err := ring.Set(keyring.Item{Key: testKey, Data: []byte("test")}); err != nil {
-		ring = nil
-		keyringAvailable = false
-		return
-	}
-	_ = ring.Remove(testKey)
-	keyringAvailable = true
+		testKey := "__token_usage_test__"
+		if err := r.Set(keyring.Item{Key: testKey, Data: []byte("test")}); err != nil {
+			return
+		}
+		_ = r.Remove(testKey)
+
+		ring = r
+		keyringAvailable = true
+	})
 }
 
 func IsKeyringAvailable() bool {
+	ensureKeyring()
 	return keyringAvailable
 }
 
@@ -61,6 +73,7 @@ func IsKeyringAvailable() bool {
 var ErrKeyNotFound = errors.New("API key not found")
 
 func StoreAPIKey(service, account, apiKey string) error {
+	ensureKeyring()
 	if ring != nil {
 		return ring.Set(keyring.Item{
 			Key:  account,
@@ -71,6 +84,7 @@ func StoreAPIKey(service, account, apiKey string) error {
 }
 
 func GetAPIKey(service, account string) (string, error) {
+	ensureKeyring()
 	if ring != nil {
 		item, err := ring.Get(account)
 		if err != nil {
@@ -92,6 +106,7 @@ func GetAPIKey(service, account string) (string, error) {
 }
 
 func DeleteAPIKey(service, account string) error {
+	ensureKeyring()
 	if ring != nil {
 		err := ring.Remove(account)
 		if err != nil && errors.Is(err, keyring.ErrKeyNotFound) {
@@ -106,6 +121,7 @@ func DeleteAPIKey(service, account string) error {
 // failure it returns whatever is available (possibly nothing) instead of an
 // error, since callers use it for reconciliation/display only.
 func ListAccountKeys() []string {
+	ensureKeyring()
 	if ring != nil {
 		keys, err := ring.Keys()
 		if err != nil {
@@ -131,9 +147,12 @@ func ListAccountKeys() []string {
 	return out
 }
 
+// ExtractKeyID returns the last 6 characters (rune-safe) of the key for
+// display and matching; keys of 6 or fewer characters are returned as-is.
 func ExtractKeyID(apiKey string) string {
-	if len(apiKey) > 6 {
-		return apiKey[len(apiKey)-6:]
+	runes := []rune(apiKey)
+	if len(runes) > 6 {
+		return string(runes[len(runes)-6:])
 	}
 	return apiKey
 }

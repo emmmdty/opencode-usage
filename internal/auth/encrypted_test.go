@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/term"
 )
 
 func TestEncryptDecrypt(t *testing.T) {
@@ -189,5 +191,58 @@ func TestStoreAndGetEncrypted(t *testing.T) {
 	_, err = getEncrypted(account)
 	if err == nil {
 		t.Error("expected error after deletion")
+	}
+}
+
+// An interactive master-password failure (no TTY, empty input, ...) must not
+// be cached forever: once TOKEN_USAGE_MASTER_PASSWORD is set, a later call
+// has to recover.
+func TestMasterPasswordRecoversAfterInteractiveFailure(t *testing.T) {
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		t.Skip("stdin is a terminal; the interactive prompt would block the test")
+	}
+
+	setTestSecretsPath(t)
+	resetMasterPasswordCache()
+	t.Setenv("TOKEN_USAGE_MASTER_PASSWORD", "")
+
+	enabled := true
+	SetUseMasterPassword(&enabled)
+	t.Cleanup(func() { SetUseMasterPassword(nil) })
+
+	// Non-TTY stdin: the interactive read must fail (and must not hang).
+	if _, err := getMasterPassword(); err == nil {
+		t.Fatal("expected the interactive master-password read to fail without a TTY")
+	}
+
+	t.Setenv("TOKEN_USAGE_MASTER_PASSWORD", "recovered-password")
+	pwd, err := getMasterPassword()
+	if err != nil {
+		t.Fatalf("expected recovery once the env variable is set, got: %v", err)
+	}
+	if pwd != "recovered-password" {
+		t.Errorf("master password = %q, want %q", pwd, "recovered-password")
+	}
+}
+
+// With use_master_password unset (nil), the documented default applies and
+// no interactive prompt is attempted — a nil mode must never wedge a
+// non-interactive session.
+func TestNilMasterPasswordModeUsesDefault(t *testing.T) {
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		t.Skip("stdin is a terminal; the old interactive prompt would block the test")
+	}
+
+	setTestSecretsPath(t)
+	resetMasterPasswordCache()
+	SetUseMasterPassword(nil)
+	t.Cleanup(func() { SetUseMasterPassword(nil) })
+
+	pwd, err := getMasterPassword()
+	if err != nil {
+		t.Fatalf("nil master-password mode must fall back to the default, got error: %v", err)
+	}
+	if pwd != defaultPassword {
+		t.Errorf("master password = %q, want the default password", pwd)
 	}
 }

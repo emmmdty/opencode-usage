@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/emmmdty/token-usage/internal/fsutil"
 	"github.com/emmmdty/token-usage/internal/i18n"
 	"go.yaml.in/yaml/v3"
 )
@@ -210,24 +211,37 @@ func LoadOrCreateConfig(path string) (*Config, error) {
 	}
 
 	var cfg *Config
+	migrated := false
 	switch probe.Version {
 	case CurrentVersion:
 		cfg = &Config{}
 		if err := yaml.Unmarshal(data, cfg); err != nil {
 			return nil, err
 		}
-	case "", "2":
+	case "2":
 		var legacy legacyV2Config
 		if err := yaml.Unmarshal(data, &legacy); err != nil {
 			return nil, err
 		}
 		cfg = migrateV2ToV3(&legacy)
+		migrated = true
+	case "":
+		// A missing version means the file's format cannot be identified.
+		// Guessing would silently reinterpret (and then overwrite) valid
+		// data — for example a hand-edited v3 config that lost its version
+		// line — so fail instead of risking data loss.
+		return nil, fmt.Errorf("%s", i18n.T("error.config.missing_version"))
 	default:
 		return nil, fmt.Errorf("%s", i18n.T("error.config.unsupported_version", probe.Version, CurrentVersion))
 	}
 
-	if err := saveConfig(cfg, path); err != nil {
-		return nil, err
+	// Only persist when the on-disk format actually changed (v2 migration).
+	// Rewriting on every load would turn a read into a write and fail for
+	// read-only config files.
+	if migrated {
+		if err := saveConfig(cfg, path); err != nil {
+			return nil, err
+		}
 	}
 
 	return cfg, nil
@@ -239,49 +253,7 @@ func saveConfig(cfg *Config, path string) error {
 		return err
 	}
 
-	return writeFileAtomic(path, data, 0600)
-}
-
-// writeFileAtomic writes data to path via a temp file in the same directory
-// followed by rename, so a crash mid-write never truncates the target.
-func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
-	}
-
-	tmp, err := os.CreateTemp(dir, ".tmp-"+filepath.Base(path)+"-*")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-
-	cleanup := func() {
-		tmp.Close()
-		os.Remove(tmpName)
-	}
-
-	if _, err := tmp.Write(data); err != nil {
-		cleanup()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		cleanup()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	if err := os.Chmod(tmpName, perm); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		os.Remove(tmpName)
-		return err
-	}
-	return nil
+	return fsutil.WriteFileAtomic(path, data, 0600)
 }
 
 func SaveConfig(cfg *Config, path string) error {
@@ -385,17 +357,27 @@ func migrateV2ToV3(old *legacyV2Config) *Config {
 }
 
 func defaultAccountName(accounts map[string]Account) string {
+	// Map iteration order is randomized in Go; sort so migrations are
+	// deterministic (first account alphabetically).
+	names := make([]string, 0, len(accounts))
 	for name := range accounts {
-		return name
+		names = append(names, name)
 	}
-	return ""
+	sortStrings(names)
+	if len(names) == 0 {
+		return ""
+	}
+	return names[0]
 }
 
 func sortStrings(s []string) { sort.Strings(s) }
 
+// keyIDOf returns the last 6 characters (rune-safe) of the key. It must
+// agree with auth.ExtractKeyID, which is used for matching.
 func keyIDOf(key string) string {
-	if len(key) > 6 {
-		return key[len(key)-6:]
+	runes := []rune(key)
+	if len(runes) > 6 {
+		return string(runes[len(runes)-6:])
 	}
 	return key
 }

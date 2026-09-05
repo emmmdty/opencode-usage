@@ -56,8 +56,13 @@ Use 'token-usage account switch opencode' to change it.`,
 		configPath, cfgErr := getConfigPath()
 		var cfg *config.Config
 		if cfgErr == nil {
-			cfg, _ = config.LoadOrCreateConfig(configPath)
-			if cfg != nil {
+			loaded, err := config.LoadOrCreateConfig(configPath)
+			if err != nil {
+				// current works without our own config; surface the problem
+				// but keep going.
+				fmt.Fprintf(os.Stderr, "%s\n", i18n.T("warning.current.config_load", err))
+			} else {
+				cfg = loaded
 				configureAuthFromConfig(cfg)
 			}
 		}

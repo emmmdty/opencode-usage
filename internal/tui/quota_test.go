@@ -342,3 +342,69 @@ func TestQuotaTableColumnAlignment(t *testing.T) {
 		t.Logf("row display lengths differ: %d vs %d", len(s1), len(s2))
 	}
 }
+
+// A negative percent (possible from unvalidated provider data) must be
+// clamped instead of reaching strings.Repeat with a negative count,
+// which panics.
+func TestRenderBarNegativePercentDoesNotPanic(t *testing.T) {
+	theme := NewTheme()
+	style := DefaultQuotaStyle()
+
+	for _, pct := range []int{-1, -5, -50, -999} {
+		bar := renderBar(pct, 10, style, theme)
+		filled := strings.Count(bar, "█")
+		empty := strings.Count(bar, "░")
+		if filled != 0 || empty != 10 {
+			t.Errorf("renderBar(%d, 10) = %d filled/%d empty cells, want 0/10", pct, filled, empty)
+		}
+	}
+}
+
+// Percentages above 100 stay clamped to a full bar.
+func TestRenderBarOverfullPercentClamped(t *testing.T) {
+	theme := NewTheme()
+	bar := renderBar(150, 10, DefaultQuotaStyle(), theme)
+	if got := strings.Count(bar, "█"); got != 10 {
+		t.Errorf("renderBar(150, 10) filled = %d, want 10", got)
+	}
+}
+
+// An "idle" window (no active usage window, e.g. Claude Code idle > 5h)
+// must be labeled as such instead of rendering a bare "n/a".
+func TestIdleWindowRendersIdleLabel(t *testing.T) {
+	theme := NewTheme()
+	style := DefaultQuotaStyle()
+
+	cell := formatQuotaCell(models.QuotaWindow{Status: "idle"}, 10, style, theme)
+	plain := stripANSI(cell)
+	if !strings.Contains(plain, "idle") {
+		t.Errorf("idle cell = %q, want it to contain the idle label", plain)
+	}
+	if strings.Contains(plain, "n/a") {
+		t.Errorf("idle cell = %q, want no n/a", plain)
+	}
+
+	compact := stripANSI(formatPercentCompact(models.QuotaWindow{Status: "idle"}, style, theme))
+	if !strings.Contains(compact, "idle") {
+		t.Errorf("idle compact = %q, want the idle label", compact)
+	}
+}
+
+func stripANSI(s string) string {
+	var b strings.Builder
+	in := false
+	for _, r := range s {
+		if r == '\033' {
+			in = true
+			continue
+		}
+		if in {
+			if r == 'm' {
+				in = false
+			}
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}

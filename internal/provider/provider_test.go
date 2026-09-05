@@ -2,10 +2,12 @@ package provider
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -248,5 +250,152 @@ func TestOpenCodeProvider_GetUsage(t *testing.T) {
 
 	if usage.Rolling.Percent != 60 {
 		t.Errorf("expected rolling percent 60, got %d", usage.Rolling.Percent)
+	}
+}
+
+// A window without a reset_at timestamp must resolve to a zero time (which
+// the TUI renders as "n/a"), not to 1970-01-01 (which renders as a
+// misleading "expired").
+func TestCodexProvider_MissingResetAtIsNot1970(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"plan_type":"pro","rate_limit":{
+			"primary_window":{"used_percent":42},
+			"secondary_window":{"used_percent":10,"reset_at":1893456000}
+		}}`)
+	}))
+	defer server.Close()
+
+	p := NewCodexProviderWithToken("test-token", server.URL)
+	usage, err := p.GetUsage()
+	if err != nil {
+		t.Fatalf("failed to get usage: %v", err)
+	}
+
+	if !usage.Rolling.ResetAt.IsZero() {
+		t.Errorf("rolling ResetAt = %v, want zero time (n/a) when reset_at is absent", usage.Rolling.ResetAt)
+	}
+	if usage.Rolling.Percent != 42 || usage.Rolling.Status != "ok" {
+		t.Errorf("rolling = %+v, want ok/42", usage.Rolling)
+	}
+	if usage.Weekly.ResetAt.IsZero() {
+		t.Error("weekly ResetAt should be parsed when present")
+	}
+}
+
+// A response body that dies mid-read must surface the read failure itself,
+// not a confusing "failed to decode response" JSON error.
+func TestClaudeProvider_TruncatedBodySurfacesReadError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		fmt.Fprint(w, `{"five_hou`)
+	}))
+	defer server.Close()
+
+	p := NewClaudeProviderWithToken("test-token", server.URL)
+	_, err := p.GetUsage()
+	if err == nil {
+		t.Fatal("expected an error for a truncated response body")
+	}
+	if !strings.Contains(err.Error(), "unexpected EOF") {
+		t.Errorf("expected the underlying read error, got: %v", err)
+	}
+}
+
+func TestCodexProvider_TruncatedBodySurfacesReadError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		fmt.Fprint(w, `{"plan_ty`)
+	}))
+	defer server.Close()
+
+	p := NewCodexProviderWithToken("test-token", server.URL)
+	_, err := p.GetUsage()
+	if err == nil {
+		t.Fatal("expected an error for a truncated response body")
+	}
+	if !strings.Contains(err.Error(), "unexpected EOF") {
+		t.Errorf("expected the underlying read error, got: %v", err)
+	}
+}
+
+// The Codex client must present the same UA family as the official CLI.
+// Empirically the wham/usage endpoint does not gate on User-Agent (empty
+// and curl UAs return 200 with a valid token), so the value is defensive
+// camouflage; the pin forces a conscious bump instead of silent staleness.
+func TestCodexProvider_UserAgent(t *testing.T) {
+	var gotUA string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		fmt.Fprint(w, `{"plan_type":"pro","rate_limit":{"primary_window":{"used_percent":1},"secondary_window":{"used_percent":1}}}`)
+	}))
+	defer server.Close()
+
+	p := NewCodexProviderWithToken("test-token", server.URL)
+	if _, err := p.GetUsage(); err != nil {
+		t.Fatalf("failed to get usage: %v", err)
+	}
+	if gotUA != "codex-cli/0.153.4" {
+		t.Errorf("User-Agent = %q, want codex-cli/0.153.4 (keep in sync with the installed codex CLI)", gotUA)
+	}
+}
+
+// Anthropic returns five_hour.utilization=0.0 with resets_at=null when no
+// Claude Code session has been active in the 5h window. That is "no active
+// window" and must be reported as the dedicated "idle" status, not as a
+// misleading active 0% window.
+func TestClaudeProvider_IdleWindowStatus(t *testing.T) {
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus string
+		wantPct    int
+		wantReset  bool
+	}{
+		{
+			name:       "idle window (zero utilization, no reset) is idle",
+			body:       `{"five_hour":{"utilization":0.0,"resets_at":null},"seven_day":{"utilization":15.0,"resets_at":"2026-09-11T04:00:00.024036Z"}}`,
+			wantStatus: "idle",
+			wantPct:    0,
+			wantReset:  false,
+		},
+		{
+			name:       "active window with zero usage stays ok",
+			body:       `{"five_hour":{"utilization":0.0,"resets_at":"2026-09-07T01:00:00Z"}}`,
+			wantStatus: "ok",
+			wantPct:    0,
+			wantReset:  true,
+		},
+		{
+			name:       "nonzero utilization without reset stays ok",
+			body:       `{"five_hour":{"utilization":42.0,"resets_at":null}}`,
+			wantStatus: "ok",
+			wantPct:    42,
+			wantReset:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, tt.body)
+			}))
+			defer server.Close()
+
+			p := NewClaudeProviderWithToken("test-token", server.URL)
+			p.cachePath = filepath.Join(t.TempDir(), "claude_cache.json")
+
+			usage, err := p.GetUsage()
+			if err != nil {
+				t.Fatalf("failed to get usage: %v", err)
+			}
+			if usage.Rolling.Status != tt.wantStatus {
+				t.Errorf("rolling status = %q, want %q", usage.Rolling.Status, tt.wantStatus)
+			}
+			if usage.Rolling.Percent != tt.wantPct {
+				t.Errorf("rolling percent = %d, want %d", usage.Rolling.Percent, tt.wantPct)
+			}
+			if tt.wantReset && usage.Rolling.ResetAt.IsZero() {
+				t.Error("rolling ResetAt should be set")
+			}
+		})
 	}
 }

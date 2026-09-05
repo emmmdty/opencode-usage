@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 )
@@ -49,6 +50,19 @@ func TestT_UnknownKey(t *testing.T) {
 	result := T("totally.made.up.key")
 	if result != "totally.made.up.key" {
 		t.Errorf("expected key itself for unknown key, got: %s", result)
+	}
+}
+
+// Dictionary strings use %w like fmt.Errorf would; T() renders via
+// Sprintf, which does not understand %w, so the verb must be translated
+// to %v or every wrapped error prints as "%!w(*errors.errorString=...)".
+func TestT_WrapsErrorVerb(t *testing.T) {
+	SetLanguage("en")
+	defer SetLanguage("en")
+	result := T("error.config.read_failed", errors.New("permission denied"))
+	expected := "failed to read config: permission denied"
+	if result != expected {
+		t.Errorf("expected %q, got %q", expected, result)
 	}
 }
 
