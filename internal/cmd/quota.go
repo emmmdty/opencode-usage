@@ -71,12 +71,12 @@ func fetchAndRender(cfg *config.Config, providerFilter, accountFilter string, js
 			extra += "\n  · " + n
 		}
 		if jsonOut {
-			resp := quotaResponse{Version: "2", Accounts: []accountResult{}}
-			err := printJSON(resp)
-			if err == nil && extra != "" {
+			if extra != "" {
 				fmt.Fprintln(os.Stderr, extra)
 			}
-			return nil, err
+			// Return an empty (non-nil) slice: the caller prints the JSON
+			// exactly once, and an empty result must encode as [] not null.
+			return []accountResult{}, nil
 		}
 		return nil, fmt.Errorf("%s", i18n.T("output.quota.no_accounts", extra))
 	}
@@ -124,12 +124,9 @@ func runQuotaOverview(accountFilter string, jsonOut bool, outPath string) error 
 	}
 	configureAuthFromConfig(cfg)
 
-	// Accept "provider/account" or bare account filters.
-	providerFilter := ""
-	if idx := strings.Index(accountFilter, "/"); idx >= 0 {
-		providerFilter = accountFilter[:idx]
-		accountFilter = accountFilter[idx+1:]
-	}
+	// Accept "provider/account", a bare provider name, or a bare account
+	// name as filters.
+	providerFilter, accountFilter := splitQuotaFilter(cfg, accountFilter)
 
 	results, err := fetchAndRender(cfg, providerFilter, accountFilter, jsonOut)
 	if err != nil {
@@ -141,6 +138,20 @@ func runQuotaOverview(accountFilter string, jsonOut bool, outPath string) error 
 		return printJSON(resp)
 	}
 	return printQuotaTable(results, cfg)
+}
+
+// splitQuotaFilter resolves a quota filter argument into
+// (providerFilter, accountFilter). "provider/account" splits on the first
+// slash; a bare name selects the whole provider when it matches one
+// (preset or custom), and is treated as an account name otherwise.
+func splitQuotaFilter(cfg *config.Config, arg string) (string, string) {
+	if idx := strings.Index(arg, "/"); idx >= 0 {
+		return arg[:idx], arg[idx+1:]
+	}
+	if _, _, err := cfg.FindProvider(arg); err == nil {
+		return arg, ""
+	}
+	return "", arg
 }
 
 func printJSON(data interface{}) error {
