@@ -23,6 +23,7 @@ const (
 
 type Config struct {
 	Version         string                    `yaml:"version"`
+	Language        string                    `yaml:"language,omitempty"`
 	Providers       map[string]PresetProvider `yaml:"providers"`
 	Custom          map[string]CustomProvider `yaml:"custom,omitempty"`
 	ColorThresholds struct {

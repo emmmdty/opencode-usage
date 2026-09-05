@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/emmmdty/token-usage/internal/auth"
 	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/emmmdty/token-usage/internal/tui"
 	"github.com/emmmdty/token-usage/internal/version"
 	"github.com/muesli/termenv"
@@ -27,6 +28,7 @@ var (
 	account    string
 	outputFile string
 	noColor    bool
+	langFlag   string
 )
 
 var rootCmd = &cobra.Command{
@@ -41,6 +43,16 @@ openai-compatible).`,
 	Version: version.Version,
 	Args:    cobra.MaximumNArgs(1),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Resolve language: flag > env > config > system LANG > default "en"
+		configLang := ""
+		if cfgPath, err := getConfigPath(); err == nil {
+			if cfg, err := config.LoadOrCreateConfig(cfgPath); err == nil {
+				configLang = cfg.Language
+			}
+		}
+		resolvedLang := i18n.DetectLanguage(langFlag, os.Getenv("TOKEN_USAGE_LANG"), configLang, os.Getenv("LANG"))
+		i18n.SetLanguage(resolvedLang)
+
 		if noColor || os.Getenv("NO_COLOR") != "" {
 			lipgloss.SetColorProfile(termenv.Ascii)
 			tui.DisableColor()
@@ -375,6 +387,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&account, "account", "n", "", "account or provider/account to query")
 	rootCmd.PersistentFlags().StringVarP(&outputFile, "output", "o", "", "output to file")
 	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable color output")
+	rootCmd.PersistentFlags().StringVar(&langFlag, "lang", "", "set display language (en|zh) for this run")
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(updateCmd)
 }

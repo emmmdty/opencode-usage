@@ -121,6 +121,44 @@ func TestFindProvider(t *testing.T) {
 	}
 }
 
+func TestLanguageFieldPersistence(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	cfg, err := LoadOrCreateConfig(configPath)
+	if err != nil {
+		t.Fatalf("failed to create config: %v", err)
+	}
+
+	cfg.Language = "zh"
+	if err := SaveConfig(cfg, configPath); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	loaded, err := LoadOrCreateConfig(configPath)
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	if loaded.Language != "zh" {
+		t.Errorf("expected language 'zh', got %q", loaded.Language)
+	}
+}
+
+func TestLanguageFieldDefaultEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	cfg, err := LoadOrCreateConfig(configPath)
+	if err != nil {
+		t.Fatalf("failed to create config: %v", err)
+	}
+
+	if cfg.Language != "" {
+		t.Errorf("expected default language '', got %q", cfg.Language)
+	}
+}
+
 func TestAllAccountsOrder(t *testing.T) {
 	cfg := getDefaultConfig()
 	cfg.Providers["opencode"].Accounts["b"] = Account{Source: SourceManual}
