@@ -174,6 +174,41 @@ token-usage version
 token-usage update
 ```
 
+## Internationalization (i18n)
+
+token-usage supports Chinese (zh) and English (en). English is the default.
+
+### Switching language
+
+```bash
+# View current language
+tu lang
+
+# Switch to Chinese
+tu lang zh
+
+# Switch to English
+tu lang en
+```
+
+### Per-run language override
+
+```bash
+# Use Chinese for this run only (does not persist)
+token-usage --lang zh quota
+
+# Environment variable (higher priority than config)
+TOKEN_USAGE_LANG=zh token-usage quota
+```
+
+### Language priority
+
+1. `--lang` flag (highest)
+2. `TOKEN_USAGE_LANG` environment variable
+3. `config.yaml` `language` field (set by `tu lang`)
+4. System `LANG`/`LC_ALL` (zh* → zh, otherwise en)
+5. Default: en
+
 ## Short aliases
 
 | Command | Alias |
@@ -263,6 +298,7 @@ use_master_password: false
 | `color_thresholds.danger` | 80 | Quota percentage to trigger danger color |
 | `max_concurrent_requests` | 5 | Max parallel API requests |
 | `use_master_password` | false | Use custom master password for encrypted storage |
+| `language` | - | Display language: `zh` (Chinese) or `en` (English) |
 
 ## Environment variables
 
@@ -271,6 +307,7 @@ use_master_password: false
 | `NO_COLOR` | Disable color output (see [no-color.org](https://no-color.org)) |
 | `TOKEN_USAGE_MASTER_PASSWORD` | Master password for encrypted storage |
 | `TOKEN_USAGE_KEYRING_PASSWORD` | Password for keyring file backend |
+| `TOKEN_USAGE_LANG` | Display language override (`zh` or `en`) |
 | `ARKCLI_SKIP_POSTINSTALL` | Skip ark-cli installer side effects (agent skill injection) |
 
 ## Security
