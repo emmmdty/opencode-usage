@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/emmmdty/token-usage/internal/models"
 	"github.com/emmmdty/token-usage/internal/provider"
 	"github.com/emmmdty/token-usage/internal/tui"
@@ -77,11 +78,11 @@ func fetchAndRender(cfg *config.Config, providerFilter, accountFilter string, js
 			}
 			return nil, err
 		}
-		return nil, fmt.Errorf("no queryable accounts configured.%s\n  Run 'token-usage provider add' to get started.", extra)
+		return nil, fmt.Errorf("%s", i18n.T("output.quota.no_accounts", extra))
 	}
 
 	if !jsonOut && term.IsTerminal(int(os.Stdout.Fd())) {
-		fmt.Fprintf(os.Stderr, "  Fetching %d accounts...\r", len(targets))
+		fmt.Fprintf(os.Stderr, i18n.T("output.quota.fetching"), len(targets))
 	}
 
 	results := runQueryTargets(cfg, targets)

@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"time"
 
+	"errors"
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/emmmdty/token-usage/internal/models"
 )
 
@@ -79,10 +81,10 @@ func (c *Client) doRequest(endpoint string) ([]byte, error) {
 			}
 		}
 
-		return nil, fmt.Errorf("API error: HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("%s", i18n.T("client.opencode.api_error", resp.StatusCode))
 	}
 
-	return nil, fmt.Errorf("API error: max retries exceeded")
+	return nil, errors.New(i18n.T("client.opencode.max_retries"))
 }
 
 func (c *Client) GetUsage() (*models.Usage, error) {

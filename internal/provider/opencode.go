@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/emmmdty/token-usage/internal/i18n"
 )
 
 type OpenCodeProvider struct {
@@ -38,7 +40,7 @@ func (p *OpenCodeProvider) IsAvailable() bool {
 func (p *OpenCodeProvider) GetUsage() (*Usage, error) {
 	req, err := http.NewRequest("GET", p.endpoint+"/usage", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.opencode.create_request", err))
 	}
 
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
@@ -46,12 +48,12 @@ func (p *OpenCodeProvider) GetUsage() (*Usage, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.opencode.make_request", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error: HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("%s", i18n.T("provider.opencode.api_error", resp.StatusCode))
 	}
 
 	var result struct {

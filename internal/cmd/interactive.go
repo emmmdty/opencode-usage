@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"golang.org/x/term"
 )
 
@@ -54,7 +55,7 @@ func promptSelect(reader *bufio.Reader, title string, options []string) (int, er
 	}
 	fmt.Println()
 	for {
-		input, err := promptInput(reader, "  Select [number]: ")
+		input, err := promptInput(reader, i18n.T("prompt.select"))
 		if err != nil {
 			return 0, err
 		}
@@ -62,7 +63,7 @@ func promptSelect(reader *bufio.Reader, title string, options []string) (int, er
 		if err == nil && idx >= 1 && idx <= len(options) {
 			return idx - 1, nil
 		}
-		fmt.Printf("  invalid selection: %s\n", input)
+		fmt.Printf("%s", i18n.T("prompt.invalid_selection", input)+"\n")
 	}
 }
 
@@ -85,6 +86,6 @@ func promptYesNo(reader *bufio.Reader, prompt string, def bool) (bool, error) {
 		case "n", "no":
 			return false, nil
 		}
-		fmt.Printf("  please answer y or n\n")
+		fmt.Printf("%s", i18n.T("prompt.yes_no")+"\n")
 	}
 }

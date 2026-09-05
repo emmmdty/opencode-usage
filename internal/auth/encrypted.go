@@ -13,6 +13,9 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/emmmdty/token-usage/internal/i18n"
+
+	"errors"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/term"
 )
@@ -68,16 +71,16 @@ func doInitMasterPassword() {
 	}
 
 	// Interactive input (masked)
-	fmt.Print("Enter master password: ")
+	fmt.Print(i18n.T("prompt.master_password"))
 	pwd, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Println() // newline after hidden input
 	if err != nil {
-		passwordErr = fmt.Errorf("failed to read master password: %w", err)
+		passwordErr = fmt.Errorf("%s", i18n.T("error.auth.master_password_read", err))
 		return
 	}
 
 	if len(pwd) == 0 {
-		passwordErr = fmt.Errorf("master password cannot be empty")
+		passwordErr = errors.New(i18n.T("error.auth.master_password_empty"))
 		return
 	}
 
@@ -223,10 +226,10 @@ func parseSecrets(decrypted string) map[string]string {
 // legacy format).
 func validateAccountName(account string) error {
 	if account == "" {
-		return fmt.Errorf("account name cannot be empty")
+		return errors.New(i18n.T("error.auth.account_empty"))
 	}
 	if strings.ContainsAny(account, "\n\x00:") {
-		return fmt.Errorf("account name cannot contain newline, NUL, or ':' characters")
+		return errors.New(i18n.T("error.auth.account_invalid_chars"))
 	}
 	return nil
 }
@@ -250,7 +253,7 @@ func loadEncrypted() (map[string]string, error) {
 
 	decoded, err := base64.StdEncoding.DecodeString(string(data))
 	if err != nil {
-		return nil, fmt.Errorf("secrets file is corrupted (invalid base64): %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("error.auth.secrets_corrupted", err))
 	}
 
 	pwd, err := getMasterPassword()
@@ -260,7 +263,7 @@ func loadEncrypted() (map[string]string, error) {
 
 	decrypted, err := decrypt(decoded, pwd)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt secrets (wrong master password?): %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("error.auth.decrypt_failed", err))
 	}
 
 	return parseSecrets(string(decrypted)), nil

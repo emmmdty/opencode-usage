@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/emmmdty/token-usage/internal/models"
 	"github.com/mattn/go-runewidth"
 )
@@ -35,7 +36,7 @@ func FormatQuotaOverview(results []AccountResult, style QuotaStyle, currentAccou
 	width := GetTerminalWidth()
 
 	if len(results) == 0 {
-		return theme.Muted.Render("  No accounts configured. Run 'token-usage account add' to get started.\n")
+		return theme.Muted.Render("  " + i18n.T("tui.empty") + "\n")
 	}
 
 	for i := range results {
@@ -77,17 +78,17 @@ func formatTable(results []AccountResult, style QuotaStyle, theme Theme, width i
 		barWidth = 0
 	}
 
-	b.WriteString(theme.Title.Render("  Token Usage  ") + theme.Muted.Render(fmt.Sprintf("refreshed %s", time.Now().Format("15:04:05"))) + "\n\n")
+	b.WriteString(theme.Title.Render("  "+i18n.T("tui.title")+"  ") + theme.Muted.Render(i18n.T("tui.refreshed", time.Now().Format("15:04:05"))) + "\n\n")
 
 	// 表头与内容对齐
 	header := "  " +
-		lipgloss.PlaceHorizontal(nameWidth, lipgloss.Left, theme.Header.Render("ACCOUNT")) +
+		lipgloss.PlaceHorizontal(nameWidth, lipgloss.Left, theme.Header.Render(i18n.T("tui.header.account"))) +
 		"  " +
-		lipgloss.PlaceHorizontal(colWidth, lipgloss.Center, theme.Header.Render("5H")) +
+		lipgloss.PlaceHorizontal(colWidth, lipgloss.Center, theme.Header.Render(i18n.T("tui.header.5h"))) +
 		"  " +
-		lipgloss.PlaceHorizontal(colWidth, lipgloss.Center, theme.Header.Render("Weekly")) +
+		lipgloss.PlaceHorizontal(colWidth, lipgloss.Center, theme.Header.Render(i18n.T("tui.header.weekly"))) +
 		"  " +
-		lipgloss.PlaceHorizontal(colWidth, lipgloss.Center, theme.Header.Render("Monthly")) +
+		lipgloss.PlaceHorizontal(colWidth, lipgloss.Center, theme.Header.Render(i18n.T("tui.header.monthly"))) +
 		"\n"
 	b.WriteString(header)
 	sepLen := nameWidth + 3*colWidth + 10
@@ -110,32 +111,32 @@ func formatTable(results []AccountResult, style QuotaStyle, theme Theme, width i
 
 	for _, r := range results {
 		if r.IsCurrent {
-			b.WriteString("  " + theme.Muted.Render("Active: ") + theme.Active.Render(r.Name) + "\n")
+			b.WriteString("  " + theme.Muted.Render(i18n.T("tui.active")) + theme.Active.Render(r.Name) + "\n")
 			break
 		}
 	}
 
 	best := findBestAccount(results)
 	if best != "" {
-		b.WriteString("  " + theme.Muted.Render("Best available: ") + theme.Success.Render(best) + "\n")
+		b.WriteString("  " + theme.Muted.Render(i18n.T("tui.best_available")) + theme.Success.Render(best) + "\n")
 	}
 
 	nextReset := findNextReset(results)
 	if nextReset != "" {
-		b.WriteString("  " + theme.Muted.Render("Next reset: ") + nextReset + "\n")
+		b.WriteString("  " + theme.Muted.Render(i18n.T("tui.next_reset")) + nextReset + "\n")
 	}
 
-	b.WriteString("\n  " + theme.Success.Render("●") + theme.Muted.Render(" healthy  ") +
-		theme.Warning.Render("▲") + theme.Muted.Render(" warning  ") +
-		theme.Danger.Render("●") + theme.Muted.Render(" critical  ") +
-		theme.Active.Render("→") + theme.Muted.Render(" active") + "\n")
+	b.WriteString("\n  " + theme.Success.Render("●") + theme.Muted.Render(" "+i18n.T("tui.legend.healthy")+"  ") +
+		theme.Warning.Render("▲") + theme.Muted.Render(" "+i18n.T("tui.legend.warning")+"  ") +
+		theme.Danger.Render("●") + theme.Muted.Render(" "+i18n.T("tui.legend.critical")+"  ") +
+		theme.Active.Render("→") + theme.Muted.Render(" "+i18n.T("tui.legend.active")) + "\n")
 
 	return b.String()
 }
 
 func formatCompact(results []AccountResult, style QuotaStyle, theme Theme) string {
 	var b strings.Builder
-	b.WriteString("  Token Usage\n\n")
+	b.WriteString("  " + i18n.T("tui.compact.title") + "\n\n")
 
 	for _, result := range results {
 		if result.Error != "" {
@@ -143,7 +144,7 @@ func formatCompact(results []AccountResult, style QuotaStyle, theme Theme) strin
 			if result.IsCurrent {
 				marker = theme.Active.Render("→ ")
 			}
-			b.WriteString(fmt.Sprintf("  %s%s  %s\n", marker, theme.Bold.Render(result.Name), theme.Error.Render("error")))
+			b.WriteString(fmt.Sprintf("  %s%s  %s\n", marker, theme.Bold.Render(result.Name), theme.Error.Render(i18n.T("tui.error"))))
 			b.WriteString(fmt.Sprintf("    %s\n", theme.Muted.Render(truncateError(result.Error, 40))))
 		} else {
 			marker := "  "
@@ -166,18 +167,18 @@ func formatCompact(results []AccountResult, style QuotaStyle, theme Theme) strin
 
 	for _, r := range results {
 		if r.IsCurrent {
-			b.WriteString("  " + theme.Muted.Render("Active: ") + theme.Active.Render(r.Name) + "\n")
+			b.WriteString("  " + theme.Muted.Render(i18n.T("tui.active")) + theme.Active.Render(r.Name) + "\n")
 			break
 		}
 	}
 
 	best := findBestAccount(results)
 	if best != "" {
-		b.WriteString("\n  " + theme.Muted.Render("Best available: ") + theme.Success.Render(best) + "\n")
+		b.WriteString("\n  " + theme.Muted.Render(i18n.T("tui.best_available")) + theme.Success.Render(best) + "\n")
 	}
 	nextReset := findNextReset(results)
 	if nextReset != "" {
-		b.WriteString("  Reset: " + nextReset + "\n")
+		b.WriteString("  " + i18n.T("tui.reset") + nextReset + "\n")
 	}
 	return b.String()
 }
@@ -361,26 +362,26 @@ func computeSummary(results []AccountResult, style QuotaStyle) string {
 
 	parts := []string{}
 	if healthy > 0 {
-		parts = append(parts, fmt.Sprintf("%d healthy", healthy))
+		parts = append(parts, i18n.T("tui.summary.healthy", healthy))
 	}
 	if warnings > 0 {
-		parts = append(parts, fmt.Sprintf("%d warning", warnings))
+		parts = append(parts, i18n.T("tui.summary.warning", warnings))
 	}
 	if criticals > 0 {
-		parts = append(parts, fmt.Sprintf("%d critical", criticals))
+		parts = append(parts, i18n.T("tui.summary.critical", criticals))
 	}
 	if unknowns > 0 {
-		parts = append(parts, fmt.Sprintf("%d unknown", unknowns))
+		parts = append(parts, i18n.T("tui.summary.unknown", unknowns))
 	}
 	if errors > 0 {
-		parts = append(parts, fmt.Sprintf("%d error", errors))
+		parts = append(parts, i18n.T("tui.summary.error", errors))
 	}
 
-	noun := "accounts"
+	noun := i18n.T("tui.summary.accounts", total)
 	if total == 1 {
-		noun = "account"
+		noun = i18n.T("tui.summary.account", total)
 	}
-	return fmt.Sprintf("%d %s  %s", total, noun, strings.Join(parts, "  "))
+	return fmt.Sprintf("%s  %s", noun, strings.Join(parts, "  "))
 }
 
 // maxKnownPercent returns the highest percentage across windows that carry

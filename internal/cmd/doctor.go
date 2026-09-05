@@ -10,6 +10,7 @@ import (
 
 	"github.com/emmmdty/token-usage/internal/auth"
 	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/emmmdty/token-usage/internal/provider"
 	"github.com/spf13/cobra"
 )
@@ -44,54 +45,54 @@ quota windows), network reachability, and opencode's auth.json presence.`,
 
 		configPath, err := getConfigPath()
 		if err != nil {
-			checks = append(checks, doctorCheck{name: "Config path", status: "FAIL", detail: err.Error()})
+			checks = append(checks, doctorCheck{name: i18n.T("output.doctor.config_path"), status: "FAIL", detail: err.Error()})
 		} else {
 			cfg, err := config.LoadOrCreateConfig(configPath)
 			if err != nil {
-				checks = append(checks, doctorCheck{name: "Config file", status: "FAIL", detail: err.Error()})
+				checks = append(checks, doctorCheck{name: i18n.T("output.doctor.config_file"), status: "FAIL", detail: err.Error()})
 			} else {
 				configureAuthFromConfig(cfg)
-				checks = append(checks, doctorCheck{name: "Config file", status: "OK", detail: configPath})
+				checks = append(checks, doctorCheck{name: i18n.T("output.doctor.config_file"), status: "OK", detail: configPath})
 				accounts := cfg.AllAccounts()
 				checks = append(checks, doctorCheck{
-					name:   "Accounts",
+					name:   i18n.T("output.doctor.accounts"),
 					status: "OK",
-					detail: fmt.Sprintf("%d configured across %d providers", len(accounts), countProviders(cfg)),
+					detail: i18n.T("output.doctor.accounts_detail", len(accounts), countProviders(cfg)),
 				})
 				// arkcli availability matters for full Volcano quota windows.
 				if provider.ArkcliAvailable() {
-					checks = append(checks, doctorCheck{name: "arkcli", status: "OK", detail: "official ark CLI found"})
+					checks = append(checks, doctorCheck{name: i18n.T("output.doctor.arkcli"), status: "OK", detail: i18n.T("output.doctor.arkcli_ok")})
 				} else {
 					checks = append(checks, doctorCheck{
-						name:   "arkcli",
+						name:   i18n.T("output.doctor.arkcli"),
 						status: "WARN",
-						detail: "not installed; Volcano quota falls back to key probe (npm i -g @volcengine/ark-cli)",
+						detail: i18n.T("output.doctor.arkcli_warn"),
 					})
 				}
 			}
 		}
 
 		if auth.IsKeyringAvailable() {
-			checks = append(checks, doctorCheck{name: "Keyring", status: "OK", detail: "system keyring available"})
+			checks = append(checks, doctorCheck{name: i18n.T("output.doctor.keyring"), status: "OK", detail: i18n.T("output.doctor.keyring_ok")})
 		} else {
-			checks = append(checks, doctorCheck{name: "Keyring", status: "WARN", detail: "using encrypted file fallback"})
+			checks = append(checks, doctorCheck{name: i18n.T("output.doctor.keyring"), status: "WARN", detail: i18n.T("output.doctor.keyring_warn")})
 		}
 
 		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := client.Get("https://opencode.ai/zen/go/v1/usage")
 		if err != nil {
-			checks = append(checks, doctorCheck{name: "Network", status: "FAIL", detail: "cannot reach opencode.ai"})
+			checks = append(checks, doctorCheck{name: i18n.T("output.doctor.network"), status: "FAIL", detail: i18n.T("output.doctor.network_fail")})
 		} else {
 			resp.Body.Close()
-			checks = append(checks, doctorCheck{name: "Network", status: "OK", detail: "opencode.ai reachable"})
+			checks = append(checks, doctorCheck{name: i18n.T("output.doctor.network"), status: "OK", detail: i18n.T("output.doctor.network_ok")})
 		}
 
 		homeDir, _ := os.UserHomeDir()
 		authPath := filepath.Join(homeDir, ".local", "share", "opencode", "auth.json")
 		if _, err := os.Stat(authPath); err == nil {
-			checks = append(checks, doctorCheck{name: "OpenCode auth", status: "OK", detail: "auth.json found"})
+			checks = append(checks, doctorCheck{name: i18n.T("output.doctor.opencode_auth"), status: "OK", detail: i18n.T("output.doctor.opencode_auth_ok")})
 		} else {
-			checks = append(checks, doctorCheck{name: "OpenCode auth", status: "WARN", detail: "auth.json not found"})
+			checks = append(checks, doctorCheck{name: i18n.T("output.doctor.opencode_auth"), status: "WARN", detail: i18n.T("output.doctor.opencode_auth_warn")})
 		}
 
 		var out strings.Builder
@@ -114,9 +115,9 @@ quota windows), network reachability, and opencode's auth.json presence.`,
 			}
 		}
 		if allOK {
-			fmt.Fprintln(&out, "\n  All checks passed.")
+			fmt.Fprintln(&out, "\n  "+i18n.T("output.doctor.all_passed"))
 		} else {
-			fmt.Fprintln(&out, "\n  Some checks failed. Run 'token-usage quota' to see details.")
+			fmt.Fprintln(&out, "\n  "+i18n.T("output.doctor.some_failed"))
 		}
 		return writeOutput(out.String())
 	},

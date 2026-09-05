@@ -10,6 +10,9 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"errors"
+	"github.com/emmmdty/token-usage/internal/i18n"
 )
 
 // Volcengine coding/agent plan endpoints (base of the ark API).
@@ -71,13 +74,13 @@ func (p *VolcengineProvider) GetUsage() (*Usage, error) {
 		// Fall through to the probe when a key is available; otherwise
 		// surface the arkcli error (e.g. not logged in).
 		if p.apiKey == "" {
-			return nil, fmt.Errorf("arkcli: %w", err)
+			return nil, fmt.Errorf("%s", i18n.T("provider.volcengine.arkcli_error", err))
 		}
 	}
 	usage, err := p.usageViaProbe()
 	if err == nil && arkErr != nil {
 		// Make the silent fallback diagnosable instead of hiding it.
-		usage.Note = fmt.Sprintf("arkcli query failed (%s); %s", truncateMsg(arkErr.Error(), 100), usage.Note)
+		usage.Note = fmt.Sprintf(i18n.T("provider.volcengine.note_arkcli_failed"), truncateMsg(arkErr.Error(), 100), usage.Note)
 	}
 	return usage, err
 }
@@ -149,12 +152,12 @@ func (p *VolcengineProvider) usageViaArkcli() (*Usage, error) {
 		if msg == "" {
 			msg = err.Error()
 		}
-		return nil, fmt.Errorf("usage plan failed: %s", truncateMsg(msg, 200))
+		return nil, fmt.Errorf("%s", i18n.T("provider.volcengine.usage_plan_failed", truncateMsg(msg, 200)))
 	}
 
 	var out arkcliOutput
 	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil {
-		return nil, fmt.Errorf("unexpected arkcli output: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.volcengine.unexpected_output", err))
 	}
 
 	usage := &Usage{
@@ -173,7 +176,7 @@ func (p *VolcengineProvider) usageViaArkcli() (*Usage, error) {
 	}
 	best := pickArkcliItem(out, wantPersonal)
 	if best == nil {
-		return nil, fmt.Errorf("no active %s subscription found (run 'arkcli usage plan' to check)", wantPersonal)
+		return nil, fmt.Errorf("%s", i18n.T("provider.volcengine.no_subscription", wantPersonal))
 	}
 
 	usage.PlanType = wantPersonal
@@ -211,7 +214,7 @@ func truncateMsg(s string, n int) string {
 // reported unknown; the note tells the user how to get full quota.
 func (p *VolcengineProvider) usageViaProbe() (*Usage, error) {
 	if p.apiKey == "" {
-		return nil, fmt.Errorf("no API key and arkcli not available")
+		return nil, errors.New(i18n.T("provider.volcengine.no_key_no_arkcli"))
 	}
 
 	base := p.probeBase
@@ -230,12 +233,12 @@ func (p *VolcengineProvider) usageViaProbe() (*Usage, error) {
 	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("probe request failed: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.volcengine.probe_failed", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusTooManyRequests {
-		return nil, fmt.Errorf("key rejected: HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("%s", i18n.T("provider.volcengine.key_rejected", resp.StatusCode))
 	}
 
 	usage := &Usage{
@@ -257,9 +260,9 @@ func (p *VolcengineProvider) usageViaProbe() (*Usage, error) {
 			// Ark reports an interval; the exact reset time is not exposed.
 			usage.Rolling.ResetAt = time.Time{}
 		}
-		usage.Note = "rate-limit snapshot (request-based); install arkcli and log in for full quota windows"
+		usage.Note = i18n.T("provider.volcengine.note_rate_limit")
 	} else {
-		usage.Note = "key valid; install arkcli (npm i -g @volcengine/ark-cli) and run 'arkcli auth login' for full quota windows"
+		usage.Note = i18n.T("provider.volcengine.note_key_valid")
 	}
 	return usage, nil
 }

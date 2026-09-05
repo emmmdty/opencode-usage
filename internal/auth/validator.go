@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/emmmdty/token-usage/internal/i18n"
 )
 
 const (
@@ -39,7 +41,7 @@ func ValidateAPIKey(apiKey, baseURL string) (*ValidationResponse, error) {
 		return &ValidationResponse{
 			Valid:   false,
 			Error:   "network_error",
-			Message: "Network connection failed, please check your network",
+			Message: i18n.T("error.auth.network_error"),
 		}, nil
 	}
 	defer resp.Body.Close()
@@ -48,31 +50,31 @@ func ValidateAPIKey(apiKey, baseURL string) (*ValidationResponse, error) {
 	case http.StatusOK:
 		return &ValidationResponse{
 			Valid:   true,
-			Message: "API Key is valid",
+			Message: i18n.T("error.auth.api_key_valid"),
 		}, nil
 	case http.StatusUnauthorized:
 		return &ValidationResponse{
 			Valid:   false,
 			Error:   "invalid_api_key",
-			Message: "Please check your API Key",
+			Message: i18n.T("error.auth.api_key_invalid"),
 		}, nil
 	case http.StatusForbidden:
 		return &ValidationResponse{
 			Valid:   false,
 			Error:   "no_go_subscription",
-			Message: "Please subscribe to the OpenCode Go plan",
+			Message: i18n.T("error.auth.no_go_subscription"),
 		}, nil
 	case http.StatusTooManyRequests:
 		return &ValidationResponse{
 			Valid:   false,
 			Error:   "rate_limited",
-			Message: "Too many requests, please try again later",
+			Message: i18n.T("error.auth.rate_limited"),
 		}, nil
 	default:
 		return &ValidationResponse{
 			Valid:   false,
 			Error:   "server_error",
-			Message: fmt.Sprintf("Server error: HTTP %d", resp.StatusCode),
+			Message: fmt.Sprintf(i18n.T("error.auth.server_error"), resp.StatusCode),
 		}, nil
 	}
 }

@@ -5,8 +5,10 @@ import (
 	"sort"
 	"strings"
 
+	"errors"
 	"github.com/emmmdty/token-usage/internal/client"
 	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/spf13/cobra"
 )
 
@@ -39,11 +41,11 @@ it defaults to the alphabetically first opencode account.`,
 		}
 
 		if len(models) == 0 {
-			return writeOutput("  No models available for your plan.\n")
+			return writeOutput("  " + i18n.T("output.models.none") + "\n")
 		}
 
 		var b strings.Builder
-		b.WriteString("\n  Available models:\n\n")
+		b.WriteString(i18n.T("output.models.available") + "\n\n")
 		for _, model := range models {
 			fmt.Fprintf(&b, "    %-30s  %s\n", model.Name, model.ID)
 		}
@@ -80,7 +82,7 @@ func getAPIKeyForCommand(accountName string) (string, error) {
 		}
 	}
 	if len(names) == 0 {
-		return "", fmt.Errorf("no opencode accounts configured. Run 'token-usage account add opencode' first")
+		return "", errors.New(i18n.T("error.account.no_opencode_accounts"))
 	}
 	sort.Strings(names)
 

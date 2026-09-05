@@ -8,6 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"errors"
+	"github.com/emmmdty/token-usage/internal/i18n"
 )
 
 // KeyQuery fetches usage with an API key and an optional base URL. Every
@@ -55,10 +58,10 @@ func getJSON(url, authHeader string, out interface{}) (int, error) {
 		return resp.StatusCode, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return resp.StatusCode, fmt.Errorf("HTTP %d: %s", resp.StatusCode, truncateMsg(strings.TrimSpace(string(body)), 160))
+		return resp.StatusCode, fmt.Errorf("%s", i18n.T("provider.vendors.http_error", resp.StatusCode, truncateMsg(strings.TrimSpace(string(body)), 160)))
 	}
 	if err := json.Unmarshal(body, out); err != nil {
-		return resp.StatusCode, fmt.Errorf("unexpected response format: %w", err)
+		return resp.StatusCode, fmt.Errorf("%s", i18n.T("provider.vendors.unexpected_format", err))
 	}
 	return resp.StatusCode, nil
 }
@@ -103,7 +106,7 @@ func zaiGLMQuery(apiKey, baseURL string) (*Usage, error) {
 		return nil, err
 	}
 	if out.Code != 200 || !out.Success {
-		return nil, fmt.Errorf("provider rejected the quota request (code %d)", out.Code)
+		return nil, fmt.Errorf("%s", i18n.T("provider.vendors.zai_glm.rejected", out.Code))
 	}
 
 	usage := &Usage{
@@ -126,7 +129,7 @@ func zaiGLMQuery(apiKey, baseURL string) (*Usage, error) {
 		}
 	}
 	if usage.Rolling.Status == StatusUnknown && usage.Monthly.Status == StatusUnknown {
-		return nil, fmt.Errorf("no recognizable quota limits in response")
+		return nil, errors.New(i18n.T("provider.vendors.zai_glm.no_limits"))
 	}
 	return usage, nil
 }
@@ -193,7 +196,7 @@ func kimiQuery(apiKey, baseURL string) (*Usage, error) {
 		}
 	}
 	if usage.Rolling.Status == StatusUnknown && usage.Weekly.Status == StatusUnknown {
-		return nil, fmt.Errorf("no recognizable usage windows in response")
+		return nil, errors.New(i18n.T("provider.vendors.kimi.no_windows"))
 	}
 	return usage, nil
 }
@@ -259,10 +262,10 @@ func minimaxQuery(apiKey, baseURL string) (*Usage, error) {
 		return nil, err
 	}
 	if out.BaseResp.StatusCode != nil && *out.BaseResp.StatusCode != 0 {
-		return nil, fmt.Errorf("provider rejected the quota request (status_code %d)", *out.BaseResp.StatusCode)
+		return nil, fmt.Errorf("%s", i18n.T("provider.vendors.minimax.rejected", *out.BaseResp.StatusCode))
 	}
 	if len(out.ModelRemains) == 0 {
-		return nil, fmt.Errorf("no coding-plan quota entries in response")
+		return nil, errors.New(i18n.T("provider.vendors.minimax.no_entries"))
 	}
 
 	usage := &Usage{
@@ -326,11 +329,11 @@ func deepseekQuery(apiKey, baseURL string) (*Usage, error) {
 		return nil, err
 	}
 	if len(out.BalanceInfos) == 0 {
-		return nil, fmt.Errorf("no balance information in response")
+		return nil, errors.New(i18n.T("provider.vendors.deepseek.no_balance"))
 	}
 	b := out.BalanceInfos[0]
 	if !out.IsAvailable {
-		return nil, fmt.Errorf("account is not available (balance %s %s)", b.TotalBalance, b.Currency)
+		return nil, fmt.Errorf("%s", i18n.T("provider.vendors.deepseek.not_available", b.TotalBalance, b.Currency))
 	}
 
 	return &Usage{
@@ -339,7 +342,7 @@ func deepseekQuery(apiKey, baseURL string) (*Usage, error) {
 		Rolling:  QuotaWindow{Status: StatusUnknown},
 		Weekly:   QuotaWindow{Status: StatusUnknown},
 		Monthly:  QuotaWindow{Status: StatusUnknown},
-		Note:     fmt.Sprintf("balance: %s %s", b.TotalBalance, b.Currency),
+		Note:     fmt.Sprintf(i18n.T("provider.vendors.deepseek.note"), b.TotalBalance, b.Currency),
 	}, nil
 }
 
@@ -350,7 +353,7 @@ func deepseekQuery(apiKey, baseURL string) (*Usage, error) {
 func openAICompatibleQuery(apiKey, baseURL string) (*Usage, error) {
 	base := strings.TrimSuffix(baseURL, "/")
 	if base == "" {
-		return nil, fmt.Errorf("base URL is required for openai-compatible providers")
+		return nil, errors.New(i18n.T("provider.vendors.openai.base_url_required"))
 	}
 
 	type billingSub struct {
@@ -370,9 +373,9 @@ func openAICompatibleQuery(apiKey, baseURL string) (*Usage, error) {
 			Rolling:  QuotaWindow{Status: "ok", Percent: pct},
 			Weekly:   QuotaWindow{Status: StatusUnknown},
 			Monthly:  QuotaWindow{Status: StatusUnknown},
-			Note:     fmt.Sprintf("credit: %.2f used of %.2f granted", sub.TotalUsed, sub.TotalGranted),
+			Note:     fmt.Sprintf(i18n.T("provider.vendors.openai.note"), sub.TotalUsed, sub.TotalGranted),
 		}, nil
 	}
 
-	return nil, fmt.Errorf("no quota endpoint found at %s (this base URL does not expose usage data; pick a built-in provider type instead)", base)
+	return nil, fmt.Errorf("%s", i18n.T("provider.vendors.openai.no_endpoint", base))
 }

@@ -10,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"errors"
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"time"
 )
 
@@ -87,16 +90,16 @@ func (p *ClaudeProvider) loadCredentials() (*claudeCredentials, error) {
 	}
 	data, err := os.ReadFile(p.credsPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read credentials: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.claude.read_credentials", err))
 	}
 
 	var creds claudeCredentials
 	if err := json.Unmarshal(data, &creds); err != nil {
-		return nil, fmt.Errorf("failed to parse credentials: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.claude.parse_credentials", err))
 	}
 
 	if creds.ClaudeAiOauth.AccessToken == "" {
-		return nil, fmt.Errorf("no access token found")
+		return nil, errors.New(i18n.T("provider.claude.no_token"))
 	}
 
 	return &creds, nil
@@ -119,13 +122,13 @@ func (p *ClaudeProvider) GetUsage() (*Usage, error) {
 
 	// 检查 token 是否过期
 	if creds.ClaudeAiOauth.ExpiresAt > 0 && time.Now().UnixMilli() > creds.ClaudeAiOauth.ExpiresAt {
-		return nil, fmt.Errorf("token expired, run 'claude' to refresh")
+		return nil, errors.New(i18n.T("provider.claude.token_expired"))
 	}
 
 	// 使用正确的 /api/oauth/usage 端点
 	req, err := http.NewRequest("GET", p.endpoint+"/api/oauth/usage", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.claude.create_request", err))
 	}
 
 	token := p.accessToken
@@ -138,7 +141,7 @@ func (p *ClaudeProvider) GetUsage() (*Usage, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.claude.make_request", err))
 	}
 	defer resp.Body.Close()
 
@@ -147,7 +150,7 @@ func (p *ClaudeProvider) GetUsage() (*Usage, error) {
 		if cached := p.loadCachedUsage(); cached != nil {
 			return cached, nil
 		}
-		return nil, fmt.Errorf("rate limited (429), try again later")
+		return nil, errors.New(i18n.T("provider.claude.rate_limited"))
 	}
 
 	respBody, _ := io.ReadAll(resp.Body)
@@ -159,7 +162,7 @@ func (p *ClaudeProvider) GetUsage() (*Usage, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error: HTTP %d - %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("%s", i18n.T("provider.claude.api_error", resp.StatusCode, string(respBody)))
 	}
 
 	var result struct {
@@ -174,7 +177,7 @@ func (p *ClaudeProvider) GetUsage() (*Usage, error) {
 	}
 
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.claude.decode_response", err))
 	}
 
 	usage := &Usage{

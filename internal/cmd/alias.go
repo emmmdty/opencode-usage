@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/spf13/cobra"
 )
 
@@ -37,15 +38,15 @@ Restart your terminal or re-source the rc file afterwards.`,
 		}
 
 		if aliasExists(rcFile, "tu") {
-			fmt.Printf("Alias 'tu' already exists in %s\n", rcFile)
-			fmt.Print("Overwrite? (y/N): ")
+			fmt.Printf("%s", i18n.T("output.alias.already_exists", rcFile)+"\n")
+			fmt.Print(i18n.T("output.alias.overwrite") + " (y/N): ")
 
 			reader := bufio.NewReader(os.Stdin)
 			response, _ := reader.ReadString('\n')
 			response = strings.TrimSpace(response)
 
 			if response != "y" && response != "Y" {
-				fmt.Println("Cancelled")
+				fmt.Println(i18n.T("output.alias.cancelled"))
 				return nil
 			}
 		}
@@ -62,8 +63,8 @@ Restart your terminal or re-source the rc file afterwards.`,
 			return err
 		}
 
-		fmt.Printf("Alias added to %s\n", rcFile)
-		fmt.Println("Run 'source " + rcFile + "' or restart your terminal")
+		fmt.Printf("%s", i18n.T("output.alias.added", rcFile)+"\n")
+		fmt.Println(i18n.T("output.alias.restart", rcFile))
 
 		return nil
 	},
@@ -91,7 +92,7 @@ Detects your shell from $SHELL: zsh writes to ~/.zshrc, anything else to
 		}
 
 		if !aliasExists(rcFile, "tu") {
-			fmt.Printf("Alias 'tu' not found in %s\n", rcFile)
+			fmt.Printf("%s", i18n.T("output.alias.not_found", rcFile)+"\n")
 			return nil
 		}
 
@@ -99,8 +100,8 @@ Detects your shell from $SHELL: zsh writes to ~/.zshrc, anything else to
 			return err
 		}
 
-		fmt.Printf("Alias 'tu' removed from %s\n", rcFile)
-		fmt.Println("Run 'source " + rcFile + "' or restart your terminal")
+		fmt.Printf("%s", i18n.T("output.alias.removed", rcFile)+"\n")
+		fmt.Println(i18n.T("output.alias.restart", rcFile))
 		return nil
 	},
 }

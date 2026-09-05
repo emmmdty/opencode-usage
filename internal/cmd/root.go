@@ -12,9 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"errors"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/emmmdty/token-usage/internal/auth"
 	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/emmmdty/token-usage/internal/tui"
 	"github.com/emmmdty/token-usage/internal/version"
 	"github.com/muesli/termenv"
@@ -102,48 +104,48 @@ from GitHub Releases and replaces the running executable. Downgrades are
 skipped. If the GitHub API rate limit is hit, install the gh CLI, set
 GITHUB_TOKEN, or wait for the limit to reset.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Printf("Current version: %s\n", version.Version)
-		fmt.Println("Checking for updates...")
+		fmt.Printf("%s", i18n.T("output.update.current_version", version.Version)+"\n")
+		fmt.Println(i18n.T("output.update.checking"))
 
 		release, err := getLatestRelease()
 		if err != nil {
-			return fmt.Errorf("failed to check for updates: %w", err)
+			return fmt.Errorf("%s", i18n.T("error.update.failed_check", err))
 		}
 
 		latestVersion := strings.TrimPrefix(release.TagName, "v")
 		currentVersion := strings.TrimPrefix(version.Version, "v")
 
 		if latestVersion == currentVersion {
-			fmt.Println("Already up to date.")
+			fmt.Println(i18n.T("output.update.up_to_date"))
 			return nil
 		}
 
 		if !isNewerVersion(latestVersion, currentVersion) {
-			fmt.Printf("Installed version %s is newer than latest release %s; skipping downgrade.\n", currentVersion, latestVersion)
+			fmt.Printf("%s", i18n.T("output.update.newer_skip", currentVersion, latestVersion)+"\n")
 			return nil
 		}
 
-		fmt.Printf("New version available: %s (current: %s)\n", latestVersion, currentVersion)
+		fmt.Printf("%s", i18n.T("output.update.available", latestVersion, currentVersion)+"\n")
 
 		binaryURL, err := getBinaryURL(release)
 		if err != nil {
 			if len(release.Assets) == 0 {
-				return fmt.Errorf("update is unavailable (no release assets found for tag %s); please install manually from https://github.com/emmmdty/token-usage/releases", release.TagName)
+				return fmt.Errorf("%s", i18n.T("error.update.no_assets", release.TagName))
 			}
-			return fmt.Errorf("no binary found for your platform (%s/%s): %w", runtime.GOOS, runtime.GOARCH, err)
+			return fmt.Errorf("%s", i18n.T("error.update.no_binary", runtime.GOOS, runtime.GOARCH, err))
 		}
 
-		fmt.Printf("Downloading %s...\n", filepath.Base(binaryURL))
+		fmt.Printf("%s", i18n.T("output.update.downloading", filepath.Base(binaryURL))+"\n")
 
 		tmpFile, err := downloadBinary(binaryURL)
 		if err != nil {
-			return fmt.Errorf("download failed: %w", err)
+			return fmt.Errorf("%s", i18n.T("error.update.download_failed", err))
 		}
 		defer os.Remove(tmpFile)
 
 		execPath, err := os.Executable()
 		if err != nil {
-			return fmt.Errorf("cannot determine executable path: %w", err)
+			return fmt.Errorf("%s", i18n.T("error.update.no_executable", err))
 		}
 		// Resolve symlinks so we replace the real binary, not the link.
 		if resolved, err := filepath.EvalSymlinks(execPath); err == nil {
@@ -151,14 +153,14 @@ GITHUB_TOKEN, or wait for the limit to reset.`,
 		}
 
 		if err := os.Chmod(tmpFile, 0755); err != nil {
-			return fmt.Errorf("failed to set permissions: %w", err)
+			return fmt.Errorf("%s", i18n.T("error.update.perm_failed", err))
 		}
 
 		if err := replaceBinary(tmpFile, execPath); err != nil {
-			return fmt.Errorf("failed to replace binary: %w", err)
+			return fmt.Errorf("%s", i18n.T("error.update.replace_failed", err))
 		}
 
-		fmt.Printf("Updated to %s successfully!\n", latestVersion)
+		fmt.Printf("%s", i18n.T("output.update.success", latestVersion)+"\n")
 		return nil
 	},
 }
@@ -207,7 +209,7 @@ func getLatestRelease() (*githubRelease, error) {
 	}
 
 	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("GitHub API rate limited. Solutions:\n  1. Install gh CLI: https://cli.github.com\n  2. Set GITHUB_TOKEN environment variable\n  3. Wait an hour for rate limit to reset")
+		return nil, errors.New(i18n.T("error.update.rate_limited"))
 	}
 
 	// Fallback: list tags
@@ -227,7 +229,7 @@ func getLatestRelease() (*githubRelease, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("could not check for updates (HTTP %d)", resp.StatusCode)
+	return nil, fmt.Errorf("%s", i18n.T("error.update.http_error", resp.StatusCode))
 }
 
 // isNewerVersion reports whether latest is strictly newer than current,
@@ -282,18 +284,18 @@ func replaceBinary(tmpFile, execPath string) error {
 		old := execPath + ".old"
 		_ = os.Remove(old)
 		if err := os.Rename(execPath, old); err != nil {
-			return fmt.Errorf("cannot move current binary: %w", err)
+			return fmt.Errorf("%s", i18n.T("error.update.move_current", err))
 		}
 		if err := os.Rename(tmpFile, execPath); err != nil {
 			// Try to restore.
 			_ = os.Rename(old, execPath)
-			return fmt.Errorf("cannot install new binary: %w", err)
+			return fmt.Errorf("%s", i18n.T("error.update.install_new", err))
 		}
 		_ = os.Remove(old) // may fail while running; cleaned up on next run
 		return nil
 	}
 
-	return fmt.Errorf("%w (you may need to run with sudo, or the temp dir and install dir are on different filesystems)", err)
+	return fmt.Errorf("%w", err)
 }
 
 func getBinaryURL(release *githubRelease) (string, error) {
@@ -325,7 +327,7 @@ func getBinaryURL(release *githubRelease) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("no binary found for %s/%s in release %s", goos, goarch, release.TagName)
+	return "", fmt.Errorf("%s", i18n.T("error.update.no_binary_release", goos, goarch, release.TagName))
 }
 
 func downloadBinary(url string) (string, error) {
@@ -337,7 +339,7 @@ func downloadBinary(url string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("download returned status %d", resp.StatusCode)
+		return "", fmt.Errorf("%s", i18n.T("error.update.download_status", resp.StatusCode))
 	}
 
 	// Prefer a temp file in the executable's directory so the final rename

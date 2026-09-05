@@ -7,8 +7,10 @@ import (
 	"sort"
 	"strings"
 
+	"errors"
 	"github.com/emmmdty/token-usage/internal/auth"
 	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/emmmdty/token-usage/internal/provider"
 	"github.com/spf13/cobra"
 )
@@ -68,7 +70,7 @@ details (credential source, masked key id, plan).`,
 
 func renderProviderList(cfg *config.Config) string {
 	var b strings.Builder
-	b.WriteString("\n  PROVIDERS\n\n")
+	b.WriteString("\n  " + i18n.T("output.provider.list.header") + "\n\n")
 
 	ids := make([]string, 0, len(cfg.Providers)+len(cfg.Custom))
 	for id := range cfg.Providers {
@@ -100,17 +102,17 @@ func renderProviderList(cfg *config.Config) string {
 		}
 		display = displayName(id, planOf(accounts, defAcc), customPtr(cfg, id))
 
-		state := "disabled"
+		state := i18n.T("output.provider.list.disabled")
 		if enabled {
-			state = "enabled"
+			state = i18n.T("output.provider.list.enabled")
 		}
 		marker := "  "
 		if defAcc != "" {
 			marker = "-> "
 		}
-		fmt.Fprintf(&b, "  %s%-14s %-22s %-9s %d account(s)", marker, id, display+queryTyp, state, len(accounts))
+		fmt.Fprintf(&b, "  %s%-14s %-22s %-9s %s", marker, id, display+queryTyp, state, i18n.T("output.provider.list.accounts", len(accounts)))
 		if defAcc != "" {
-			fmt.Fprintf(&b, "  default: %s", defAcc)
+			fmt.Fprintf(&b, "  "+i18n.T("output.provider.list.default"), defAcc)
 		}
 		b.WriteString("\n")
 		for _, name := range sortedAccountNames(accounts) {
@@ -129,7 +131,7 @@ func renderProviderList(cfg *config.Config) string {
 			fmt.Fprintf(&b, "      %-16s %s\n", name, detail)
 		}
 	}
-	b.WriteString("\n  Add more: token-usage provider add\n\n")
+	b.WriteString("\n  " + i18n.T("output.provider.list.footer") + "\n\n")
 	return b.String()
 }
 
@@ -216,7 +218,7 @@ Examples:
 			for i, item := range presetMenuItems {
 				opts[i] = item.label
 			}
-			idx, err := promptSelect(reader, "Provider type:", opts)
+			idx, err := promptSelect(reader, i18n.T("output.provider.add.provider_type"), opts)
 			if err != nil {
 				return err
 			}
@@ -266,9 +268,9 @@ func addPresetProvider(cfg *config.Config, cfgPath string, reader *bufio.Reader,
 		plan = opts.plan
 		if plan == "" {
 			opts2 := []string{"coding", "agent"}
-			idx, err := promptSelect(reader, "Subscription type:", []string{
-				"coding   Volcano Engine (Coding Plan)",
-				"agent    Volcano Engine (Agent Plan)",
+			idx, err := promptSelect(reader, i18n.T("output.provider.add.subscription_type"), []string{
+				i18n.T("output.provider.add.plan_coding"),
+				i18n.T("output.provider.add.plan_agent"),
 			})
 			if err != nil {
 				return err
@@ -326,32 +328,32 @@ func addPresetProvider(cfg *config.Config, cfgPath string, reader *bufio.Reader,
 	default:
 		apiKey := opts.apiKey
 		if apiKey == "" {
-			secret, err := promptSecret("  API Key: ")
+			secret, err := promptSecret(i18n.T("prompt.api_key"))
 			if err != nil {
 				return err
 			}
 			apiKey = secret
 		}
 		if apiKey == "" {
-			return fmt.Errorf("API key cannot be empty")
+			return errors.New(i18n.T("error.account.key_empty"))
 		}
 
 		accountName = opts.name
 		if accountName == "" {
-			name, err := promptInput(reader, "  Account name: ")
+			name, err := promptInput(reader, i18n.T("prompt.account_name"))
 			if err != nil {
 				return err
 			}
 			accountName = name
 		}
 		if strings.ContainsAny(accountName, "/\n\x00:") {
-			return fmt.Errorf("account name cannot contain '/', newline, NUL, or ':' characters")
+			return errors.New(i18n.T("error.account.name_invalid"))
 		}
 
 		// Validate now so broken keys never reach the config.
-		fmt.Println("  Validating key...")
+		fmt.Println("  " + i18n.T("output.provider.add.validating_key"))
 		if err := validateProviderKey(providerType, plan, apiKey); err != nil {
-			return fmt.Errorf("key validation failed: %w", err)
+			return fmt.Errorf("%s", i18n.T("error.account.key_validation_failed", err))
 		}
 
 		if err := auth.StoreAPIKey("token-usage", providerType+"/"+accountName, apiKey); err != nil {
@@ -370,7 +372,7 @@ func addPresetProvider(cfg *config.Config, cfgPath string, reader *bufio.Reader,
 		p.Accounts = map[string]config.Account{}
 	}
 	if _, exists := p.Accounts[accountName]; exists && acc.Source != config.SourceLocal {
-		return fmt.Errorf("account '%s' already exists for provider '%s'", accountName, providerType)
+		return fmt.Errorf("%s", i18n.T("error.account.already_exists", accountName, providerType))
 	}
 	// Adding an account (re)enables the provider.
 	p.Enabled = true
@@ -387,8 +389,8 @@ func addPresetProvider(cfg *config.Config, cfgPath string, reader *bufio.Reader,
 		return err
 	}
 
-	fmt.Printf("\n  Provider '%s' account '%s' added (%s)\n", providerType, accountName, acc.Source)
-	fmt.Println("  Run 'token-usage quota' to view usage.")
+	fmt.Printf("%s", i18n.T("output.provider.add.preset_added", providerType, accountName, acc.Source))
+	fmt.Println("  " + i18n.T("output.provider.add.run_quota"))
 	return nil
 }
 
@@ -397,20 +399,20 @@ func addPresetProvider(cfg *config.Config, cfgPath string, reader *bufio.Reader,
 func addCustomProvider(cfg *config.Config, cfgPath string, reader *bufio.Reader, opts addOpts) error {
 	name := opts.name
 	if name == "" {
-		v, err := promptInput(reader, "  Provider name (unique id): ")
+		v, err := promptInput(reader, i18n.T("prompt.base_url"))
 		if err != nil {
 			return err
 		}
 		name = v
 	}
 	if strings.ContainsAny(name, " \n\x00:") {
-		return fmt.Errorf("provider name cannot contain spaces or special characters")
+		return errors.New(i18n.T("error.provider.name_spaces"))
 	}
 	if _, exists := cfg.Providers[name]; exists {
-		return fmt.Errorf("'%s' conflicts with a built-in provider", name)
+		return fmt.Errorf("%s", i18n.T("error.provider.name_conflicts", name))
 	}
 	if _, exists := cfg.Custom[name]; exists {
-		return fmt.Errorf("custom provider '%s' already exists", name)
+		return fmt.Errorf("%s", i18n.T("error.provider.custom_exists", name))
 	}
 
 	queryType := opts.queryType
@@ -419,19 +421,19 @@ func addCustomProvider(cfg *config.Config, cfgPath string, reader *bufio.Reader,
 		for _, qt := range provider.BuiltinKeyQueries {
 			opts2 = append(opts2, qt)
 		}
-		idx, err := promptSelect(reader, "Query implementation:", opts2)
+		idx, err := promptSelect(reader, i18n.T("prompt.query_impl"), opts2)
 		if err != nil {
 			return err
 		}
 		queryType = provider.BuiltinKeyQueries[idx]
 	}
 	if _, ok := provider.LookupKeyQuery(queryType); !ok {
-		return fmt.Errorf("unknown query type '%s' (available: %s)", queryType, strings.Join(provider.BuiltinKeyQueries, ", "))
+		return fmt.Errorf("%s", i18n.T("error.provider.unknown_query_type", queryType, strings.Join(provider.BuiltinKeyQueries, ", ")))
 	}
 
 	baseURL := opts.baseURL
 	if baseURL == "" {
-		v, err := promptInput(reader, "  Base URL (e.g. https://api.z.ai): ")
+		v, err := promptInput(reader, i18n.T("prompt.base_url"))
 		if err != nil {
 			return err
 		}
@@ -441,24 +443,24 @@ func addCustomProvider(cfg *config.Config, cfgPath string, reader *bufio.Reader,
 
 	apiKey := opts.apiKey
 	if apiKey == "" {
-		v, err := promptSecret("  API Key: ")
+		v, err := promptSecret(i18n.T("prompt.api_key"))
 		if err != nil {
 			return err
 		}
 		apiKey = v
 	}
 	if apiKey == "" {
-		return fmt.Errorf("API key cannot be empty")
+		return errors.New(i18n.T("error.account.key_empty"))
 	}
 
 	// Live validation: the provider is only saved if quota querying works.
-	fmt.Println("  Validating quota query...")
+	fmt.Println("  " + i18n.T("output.provider.add.validating_query"))
 	q, _ := provider.LookupKeyQuery(queryType)
 	usage, err := q(apiKey, baseURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "\n  %v\n", err)
-		fmt.Fprintln(os.Stderr, "  The custom provider was NOT saved (quota query is not usable).")
-		return fmt.Errorf("validation failed")
+		fmt.Fprintln(os.Stderr, "  "+i18n.T("output.provider.add.not_saved"))
+		return errors.New(i18n.T("error.provider.validation_failed"))
 	}
 
 	accName := "main"
@@ -491,7 +493,7 @@ func addCustomProvider(cfg *config.Config, cfgPath string, reader *bufio.Reader,
 		return err
 	}
 
-	fmt.Printf("\n  Custom provider '%s' added (query: %s)\n", name, queryType)
+	fmt.Printf("%s", i18n.T("output.provider.add.custom_added", name, queryType))
 	if usage.Note != "" {
 		fmt.Printf("  %s\n", usage.Note)
 	}
@@ -566,7 +568,7 @@ are kept); re-enable with 'token-usage provider enable <provider>'.`,
 			if err := config.SaveConfig(cfg, cfgPath); err != nil {
 				return err
 			}
-			fmt.Printf("Custom provider '%s' removed\n", id)
+			fmt.Printf("%s", i18n.T("output.provider.remove.custom_removed", id)+"\n")
 			return nil
 		}
 		if _, ok := cfg.Providers[id]; ok {
@@ -574,10 +576,10 @@ are kept); re-enable with 'token-usage provider enable <provider>'.`,
 			if err := config.SaveConfig(cfg, cfgPath); err != nil {
 				return err
 			}
-			fmt.Printf("Preset provider '%s' disabled (use 'token-usage provider enable %s' to re-enable)\n", id, id)
+			fmt.Printf("%s", i18n.T("output.provider.remove.preset_disabled", id, id)+"\n")
 			return nil
 		}
-		return fmt.Errorf("provider '%s' not found", id)
+		return fmt.Errorf("%s", i18n.T("error.provider.not_found", id))
 	},
 }
 
@@ -619,14 +621,14 @@ func setProviderEnabled(id string, enabled bool) error {
 		c.Enabled = enabled
 		cfg.Custom[id] = c
 	} else {
-		return fmt.Errorf("provider '%s' not found", id)
+		return fmt.Errorf("%s", i18n.T("error.provider.not_found", id))
 	}
 	if err := config.SaveConfig(cfg, cfgPath); err != nil {
 		return err
 	}
-	state := "disabled"
+	state := i18n.T("output.provider.list.disabled")
 	if enabled {
-		state = "enabled"
+		state = i18n.T("output.provider.list.enabled")
 	}
 	fmt.Printf("Provider '%s' %s\n", id, state)
 	return nil

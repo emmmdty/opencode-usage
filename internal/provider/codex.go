@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"errors"
+	"github.com/emmmdty/token-usage/internal/i18n"
 )
 
 type CodexProvider struct {
@@ -70,16 +73,16 @@ func (p *CodexProvider) loadAuth() (*codexAuth, error) {
 	}
 	data, err := os.ReadFile(p.authPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read auth file: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.codex.read_auth", err))
 	}
 
 	var auth codexAuth
 	if err := json.Unmarshal(data, &auth); err != nil {
-		return nil, fmt.Errorf("failed to parse auth file: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.codex.parse_auth", err))
 	}
 
 	if auth.Tokens.AccessToken == "" {
-		return nil, fmt.Errorf("no access token found")
+		return nil, errors.New(i18n.T("provider.codex.no_token"))
 	}
 
 	return &auth, nil
@@ -94,7 +97,7 @@ func (p *CodexProvider) GetUsage() (*Usage, error) {
 	// 使用 wham/usage 端点（codex/usage 有 Cloudflare 保护）
 	req, err := http.NewRequest("GET", p.endpoint+"/backend-api/wham/usage", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.codex.create_request", err))
 	}
 
 	token := p.accessToken
@@ -108,7 +111,7 @@ func (p *CodexProvider) GetUsage() (*Usage, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.codex.make_request", err))
 	}
 	defer resp.Body.Close()
 
@@ -118,11 +121,11 @@ func (p *CodexProvider) GetUsage() (*Usage, error) {
 
 	// 检查是否返回 HTML（通常是认证失败）
 	if strings.Contains(respStr, "<html>") || strings.Contains(respStr, "<!DOCTYPE") {
-		return nil, fmt.Errorf("token expired or invalid, run 'codex' to refresh")
+		return nil, errors.New(i18n.T("provider.codex.token_expired"))
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error: HTTP %d - %s", resp.StatusCode, truncateStr(respStr, 100))
+		return nil, fmt.Errorf("%s", i18n.T("provider.codex.api_error", resp.StatusCode, truncateStr(respStr, 100)))
 	}
 
 	var result struct {
@@ -142,7 +145,7 @@ func (p *CodexProvider) GetUsage() (*Usage, error) {
 	}
 
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("provider.codex.decode_response", err))
 	}
 
 	usage := &Usage{

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/99designs/keyring"
+	"github.com/emmmdty/token-usage/internal/i18n"
 )
 
 var (
@@ -24,7 +25,7 @@ func init() {
 			if pwd := os.Getenv("TOKEN_USAGE_KEYRING_PASSWORD"); pwd != "" {
 				return pwd, nil
 			}
-			return "", fmt.Errorf("keyring password not available in non-interactive mode")
+			return "", errors.New(i18n.T("error.auth.keyring_password"))
 		},
 	}
 
@@ -76,7 +77,7 @@ func GetAPIKey(service, account string) (string, error) {
 			if errors.Is(err, keyring.ErrKeyNotFound) {
 				return "", fmt.Errorf("%w for account: %s", ErrKeyNotFound, account)
 			}
-			return "", fmt.Errorf("keyring error: %w", err)
+			return "", fmt.Errorf("%s", i18n.T("error.auth.keyring_error", err))
 		}
 		return string(item.Data), nil
 	}

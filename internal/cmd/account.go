@@ -12,8 +12,10 @@ import (
 	"strings"
 	"time"
 
+	"errors"
 	"github.com/emmmdty/token-usage/internal/auth"
 	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/emmmdty/token-usage/internal/provider"
 	"github.com/mattn/go-runewidth"
 	"github.com/spf13/cobra"
@@ -128,35 +130,35 @@ func addCustomAccount(cfg *config.Config, cfgPath string, reader *bufio.Reader, 
 
 	apiKey := acctKey
 	if apiKey == "" {
-		secret, err := promptSecret("  API Key: ")
+		secret, err := promptSecret(i18n.T("prompt.api_key"))
 		if err != nil {
 			return err
 		}
 		apiKey = secret
 	}
 	if apiKey == "" {
-		return fmt.Errorf("API key cannot be empty")
+		return errors.New(i18n.T("error.account.key_empty"))
 	}
 
 	accountName := name
 	if accountName == "" {
-		v, err := promptInput(reader, "  Account name: ")
+		v, err := promptInput(reader, i18n.T("prompt.account_name"))
 		if err != nil {
 			return err
 		}
 		accountName = v
 	}
 	if strings.ContainsAny(accountName, "/\n\x00:") {
-		return fmt.Errorf("account name cannot contain '/', newline, NUL, or ':' characters")
+		return errors.New(i18n.T("error.account.name_invalid"))
 	}
 	if _, exists := custom.Accounts[accountName]; exists {
-		return fmt.Errorf("account '%s' already exists for provider '%s'", accountName, providerID)
+		return fmt.Errorf("%s", i18n.T("error.account.already_exists", accountName, providerID))
 	}
 
-	fmt.Println("  Validating quota query...")
+	fmt.Println("  " + i18n.T("output.provider.add.validating_query"))
 	if _, err := q(apiKey, custom.BaseURL); err != nil {
 		fmt.Fprintf(os.Stderr, "\n  %v\n", err)
-		return fmt.Errorf("account was NOT saved (validation failed)")
+		return errors.New(i18n.T("error.account.not_saved"))
 	}
 
 	if err := auth.StoreAPIKey("token-usage", providerID+"/"+accountName, apiKey); err != nil {
@@ -173,7 +175,7 @@ func addCustomAccount(cfg *config.Config, cfgPath string, reader *bufio.Reader, 
 		_ = auth.DeleteAPIKey("token-usage", providerID+"/"+accountName)
 		return err
 	}
-	fmt.Printf("\n  Account '%s' added to provider '%s'\n", accountName, providerID)
+	fmt.Printf("%s", i18n.T("output.account.add.added", accountName, providerID))
 	return nil
 }
 
@@ -228,7 +230,7 @@ func renderAccountList(cfg *config.Config, providerFilter string) string {
 		g.accounts = append(g.accounts, pa)
 	}
 	if len(order) == 0 {
-		return "No accounts configured. Run 'token-usage provider add' to get started.\n"
+		return i18n.T("output.account.list.empty") + "\n"
 	}
 	sort.Strings(order)
 
@@ -326,7 +328,7 @@ defined but empty; use 'token-usage provider remove' to delete it fully.`,
 		}
 
 		if err := auth.DeleteAPIKey("token-usage", providerID+"/"+accountName); err != nil {
-			return fmt.Errorf("account removed from config but key deletion failed: %w", err)
+			return fmt.Errorf("%s", i18n.T("error.account.key_delete_failed", err))
 		}
 		fmt.Printf("Account '%s/%s' removed\n", providerID, accountName)
 		return nil
@@ -343,7 +345,7 @@ func resolveProviderAccount(cfg *config.Config, args []string) (string, string, 
 			return "", "", err
 		}
 		if _, ok := accounts[accountName]; !ok {
-			return "", "", fmt.Errorf("account '%s' not found for provider '%s'", accountName, providerID)
+			return "", "", fmt.Errorf("%s", i18n.T("error.account.not_found", accountName, providerID))
 		}
 		return providerID, accountName, nil
 	}
@@ -360,7 +362,7 @@ func resolveProviderAccount(cfg *config.Config, args []string) (string, string, 
 		}
 		switch len(matches) {
 		case 0:
-			return "", "", fmt.Errorf("account '%s' not found", args[0])
+			return "", "", fmt.Errorf("%s", i18n.T("error.account.not_found_simple", args[0]))
 		case 1:
 			return matches[0].ProviderID, matches[0].Account, nil
 		default:
@@ -368,10 +370,10 @@ func resolveProviderAccount(cfg *config.Config, args []string) (string, string, 
 			for _, m := range matches {
 				ids = append(ids, m.ProviderID+"/"+m.Account)
 			}
-			return "", "", fmt.Errorf("account '%s' is ambiguous (%s); specify provider", args[0], strings.Join(ids, ", "))
+			return "", "", fmt.Errorf("%s", i18n.T("error.account.ambiguous", args[0], strings.Join(ids, ", ")))
 		}
 	}
-	return "", "", fmt.Errorf("usage: token-usage account remove <provider> <account>")
+	return "", "", errors.New(i18n.T("error.account.usage_remove"))
 }
 
 var accountSwitchCmd = &cobra.Command{
@@ -407,7 +409,7 @@ by 'quota' and 'providers' output.`,
 			if accounts, _, err := cfg.FindProvider(args[0]); err == nil {
 				names := sortedAccountNames(accounts)
 				if len(names) == 0 {
-					return fmt.Errorf("provider '%s' has no accounts", args[0])
+					return fmt.Errorf("%s", i18n.T("error.account.no_accounts", args[0]))
 				}
 				if len(names) == 1 {
 					args = []string{args[0], names[0]}
@@ -418,7 +420,7 @@ by 'quota' and 'providers' output.`,
 					for i, n := range names {
 						marker := ""
 						if n == def {
-							marker = " (current)"
+							marker = i18n.T("output.account.switch.current_marker")
 						}
 						keyID := accounts[n].KeyID
 						if keyID != "" {
@@ -452,7 +454,7 @@ by 'quota' and 'providers' output.`,
 			return err
 		}
 
-		fmt.Printf("  Current account for '%s': %s\n", providerID, accountName)
+		fmt.Printf("%s", "  "+i18n.T("output.account.switch.current", providerID, accountName)+"\n")
 
 		// opencode extra behavior: sync opencode auth.json.
 		if providerID == "opencode" {
@@ -468,16 +470,16 @@ by 'quota' and 'providers' output.`,
 			if err := writeAuthJSON(providers); err != nil {
 				return err
 			}
-			fmt.Printf("  opencode auth.json updated (sk-...%s)\n", auth.ExtractKeyID(apiKey))
+			fmt.Printf("%s", "  "+i18n.T("output.account.switch.auth_updated", auth.ExtractKeyID(apiKey))+"\n")
 			if switchClipboard {
 				if err := copyToClipboard(apiKey); err != nil {
-					fmt.Printf("  Could not copy key to clipboard: %v\n", err)
+					fmt.Printf("%s", "  "+i18n.T("output.account.switch.clipboard_error", err)+"\n")
 				} else {
-					fmt.Println("  API key copied to clipboard!")
-					fmt.Println("  WARNING: Clear it after use (run 'token-usage account clear-clipboard').")
+					fmt.Println("  " + i18n.T("output.account.switch.clipboard_ok"))
+					fmt.Println("  " + i18n.T("output.account.switch.clipboard_warn"))
 				}
 			}
-			fmt.Println("  Run /connect in opencode to apply the change.")
+			fmt.Println("  " + i18n.T("output.account.switch.run_connect"))
 		}
 		return nil
 	},
@@ -517,16 +519,16 @@ or unique bare account name).`,
 			return err
 		}
 		if len(targets) == 0 {
-			return fmt.Errorf("cannot build a query for %s/%s (missing credentials or disabled provider)", providerID, accountName)
+			return fmt.Errorf("%s", i18n.T("error.account.cannot_build_query", providerID, accountName))
 		}
 
-		fmt.Printf("  Testing %s/%s...\n", providerID, accountName)
+		fmt.Printf("%s", "  "+i18n.T("output.account.test.testing", providerID, accountName)+"\n")
 		usage, err := targets[0].query()
 		if err != nil {
-			return fmt.Errorf("FAILED: %w", err)
+			return fmt.Errorf("%s", i18n.T("output.account.test.failed", err))
 		}
 		touchLastVerified(cfg, providerID, accountName, cfgPath)
-		fmt.Printf("  OK: plan=%s rolling=%s%% weekly=%s%% monthly=%s%%\n",
+		fmt.Printf("  "+i18n.T("output.account.test.ok")+"\n",
 			usage.PlanType,
 			windowPct(usage.Rolling), windowPct(usage.Weekly), windowPct(usage.Monthly))
 		if usage.Note != "" {
@@ -600,9 +602,9 @@ API keys are never written. Use with --output to write to a file.`,
 		}
 		if outputFile != "" {
 			if err := os.WriteFile(outputFile, jsonData, 0600); err != nil {
-				return fmt.Errorf("failed to write file: %w", err)
+				return fmt.Errorf("%s", i18n.T("error.config.file_write", err))
 			}
-			fmt.Printf("Account configuration exported to: %s\n", outputFile)
+			fmt.Printf("%s", i18n.T("output.account.export.exported", outputFile)+"\n")
 		} else {
 			fmt.Println(string(jsonData))
 		}
@@ -637,7 +639,7 @@ are skipped with a reason; keys are stored before the config is updated.`,
 			return fmt.Errorf("failed to parse JSON: %w", err)
 		}
 		if len(importData.Accounts) == 0 {
-			return fmt.Errorf("no importable accounts found")
+			return errors.New(i18n.T("error.account.import_no_accounts"))
 		}
 
 		cfgPath, err := getConfigPath()
@@ -657,30 +659,30 @@ are skipped with a reason; keys are stored before the config is updated.`,
 				providerID = "opencode" // legacy exports were opencode keys
 			}
 			if entry.Name == "" || entry.APIKey == "" {
-				fmt.Printf("Skipping invalid entry: name=%q\n", entry.Name)
+				fmt.Printf("%s", i18n.T("output.account.import.skipping_invalid", entry.Name)+"\n")
 				skipped++
 				continue
 			}
 			if strings.ContainsAny(entry.Name, "/\n\x00:") {
-				fmt.Printf("Skipping account '%s': invalid characters\n", entry.Name)
+				fmt.Printf("%s", i18n.T("output.account.import.skipping_chars", entry.Name)+"\n")
 				skipped++
 				continue
 			}
 
 			accounts, _, err := cfg.FindProvider(providerID)
 			if err != nil {
-				fmt.Printf("Skipping account '%s': unknown provider '%s'\n", entry.Name, providerID)
+				fmt.Printf("%s", i18n.T("output.account.import.skipping_provider", entry.Name, providerID)+"\n")
 				skipped++
 				continue
 			}
 			if _, exists := accounts[entry.Name]; exists {
-				fmt.Printf("Skipping existing account: '%s/%s'\n", providerID, entry.Name)
+				fmt.Printf("%s", i18n.T("output.account.import.skipping_existing", providerID, entry.Name)+"\n")
 				skipped++
 				continue
 			}
 
 			if err := auth.StoreAPIKey("token-usage", providerID+"/"+entry.Name, entry.APIKey); err != nil {
-				fmt.Printf("Skipping account '%s': storage error: %v\n", entry.Name, err)
+				fmt.Printf("%s", i18n.T("output.account.import.skipping_storage", entry.Name, err)+"\n")
 				skipped++
 				continue
 			}
@@ -702,14 +704,14 @@ are skipped with a reason; keys are stored before the config is updated.`,
 			}
 			if err := config.SaveConfig(cfg, cfgPath); err != nil {
 				_ = auth.DeleteAPIKey("token-usage", providerID+"/"+entry.Name)
-				fmt.Printf("Skipping account '%s': config save error: %v\n", entry.Name, err)
+				fmt.Printf("%s", i18n.T("output.account.import.skipping_config", entry.Name, err)+"\n")
 				skipped++
 				continue
 			}
-			fmt.Printf("Imported account '%s/%s'\n", providerID, entry.Name)
+			fmt.Printf("%s", i18n.T("output.account.import.imported", providerID, entry.Name)+"\n")
 			imported++
 		}
-		fmt.Printf("\nImport complete: %d imported, %d skipped\n", imported, skipped)
+		fmt.Printf("%s", i18n.T("output.account.import.complete", imported, skipped))
 		return nil
 	},
 }
@@ -717,11 +719,11 @@ are skipped with a reason; keys are stored before the config is updated.`,
 func readAuthJSON() (map[string]authProvider, error) {
 	data, err := os.ReadFile(opencodeAuthPath())
 	if err != nil {
-		return nil, fmt.Errorf("failed to read auth.json: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("error.account.auth_json_read", err))
 	}
 	var providers map[string]authProvider
 	if err := json.Unmarshal(data, &providers); err != nil {
-		return nil, fmt.Errorf("failed to parse auth.json: %w", err)
+		return nil, fmt.Errorf("%s", i18n.T("error.account.auth_json_parse", err))
 	}
 	return providers, nil
 }
@@ -729,38 +731,38 @@ func readAuthJSON() (map[string]authProvider, error) {
 func writeAuthJSON(providers map[string]authProvider) error {
 	authDir := filepathDir(opencodeAuthPath())
 	if err := os.MkdirAll(authDir, 0700); err != nil {
-		return fmt.Errorf("failed to create auth directory: %w", err)
+		return fmt.Errorf("%s", i18n.T("error.config.file_create_dir", err))
 	}
 	data, err := json.MarshalIndent(providers, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal auth.json: %w", err)
+		return fmt.Errorf("%s", i18n.T("error.config.file_marshal", err))
 	}
 	tmpFile, err := os.CreateTemp(authDir, "auth.json.tmp.*")
 	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
+		return fmt.Errorf("%s", i18n.T("error.config.file_temp", err))
 	}
 	tmpPath := tmpFile.Name()
 	if _, err := tmpFile.Write(data); err != nil {
 		tmpFile.Close()
 		os.Remove(tmpPath)
-		return fmt.Errorf("failed to write temp file: %w", err)
+		return fmt.Errorf("%s", i18n.T("error.config.file_temp_write", err))
 	}
 	if err := tmpFile.Sync(); err != nil {
 		tmpFile.Close()
 		os.Remove(tmpPath)
-		return fmt.Errorf("failed to sync temp file: %w", err)
+		return fmt.Errorf("%s", i18n.T("error.config.file_temp_sync", err))
 	}
 	if err := tmpFile.Close(); err != nil {
 		os.Remove(tmpPath)
-		return fmt.Errorf("failed to close temp file: %w", err)
+		return fmt.Errorf("%s", i18n.T("error.config.file_temp_close", err))
 	}
 	if err := os.Chmod(tmpPath, 0600); err != nil {
 		os.Remove(tmpPath)
-		return fmt.Errorf("failed to set permissions: %w", err)
+		return fmt.Errorf("%s", i18n.T("error.config.file_perms", err))
 	}
 	if err := os.Rename(tmpPath, opencodeAuthPath()); err != nil {
 		os.Remove(tmpPath)
-		return fmt.Errorf("failed to replace auth.json: %w", err)
+		return fmt.Errorf("%s", i18n.T("error.config.file_replace", err))
 	}
 	return nil
 }
@@ -780,12 +782,12 @@ func copyToClipboard(text string) error {
 		} else if _, err := exec.LookPath("clip.exe"); err == nil {
 			cmd = exec.Command("clip.exe")
 		} else {
-			return fmt.Errorf("no clipboard tool found (install xclip, xsel, or run in WSL)")
+			return errors.New(i18n.T("error.account.clipboard_not_found"))
 		}
 	case "windows":
 		cmd = exec.Command("clip")
 	default:
-		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+		return fmt.Errorf("%s", i18n.T("error.account.clipboard_unsupported", runtime.GOOS))
 	}
 	cmd.Stdin = strings.NewReader(text)
 	return cmd.Run()
@@ -798,9 +800,9 @@ var clearClipboardCmd = &cobra.Command{
 	Long:    "Clear the system clipboard to remove any API key that was copied by 'account switch --clipboard'.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := copyToClipboard(""); err != nil {
-			return fmt.Errorf("failed to clear clipboard: %w", err)
+			return fmt.Errorf("%s", i18n.T("error.account.clear_clipboard_failed", err))
 		}
-		fmt.Println("  Clipboard cleared.")
+		fmt.Println("  " + i18n.T("output.account.clear_clipboard.cleared"))
 		return nil
 	},
 }

@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -153,7 +154,7 @@ func (c *Config) FindProvider(id string) (accounts map[string]Account, enabled b
 	if p, ok := c.Custom[id]; ok {
 		return p.Accounts, p.Enabled, nil
 	}
-	return nil, false, fmt.Errorf("provider '%s' not found", id)
+	return nil, false, fmt.Errorf("%s", i18n.T("error.config.not_found", id))
 }
 
 func getDefaultConfig() *Config {
@@ -222,7 +223,7 @@ func LoadOrCreateConfig(path string) (*Config, error) {
 		}
 		cfg = migrateV2ToV3(&legacy)
 	default:
-		return nil, fmt.Errorf("unsupported config version %q (expected %s)", probe.Version, CurrentVersion)
+		return nil, fmt.Errorf("%s", i18n.T("error.config.unsupported_version", probe.Version, CurrentVersion))
 	}
 
 	if err := saveConfig(cfg, path); err != nil {

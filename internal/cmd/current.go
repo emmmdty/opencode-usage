@@ -10,6 +10,7 @@ import (
 
 	"github.com/emmmdty/token-usage/internal/auth"
 	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/spf13/cobra"
 )
 
@@ -39,7 +40,7 @@ Use 'token-usage account switch opencode' to change it.`,
 		authPath := filepath.Join(homeDir, ".local", "share", "opencode", "auth.json")
 
 		if _, err := os.Stat(authPath); os.IsNotExist(err) {
-			return writeOutput("  No opencode configuration found.\n  Run 'token-usage account add' to get started.\n")
+			return writeOutput("  " + i18n.T("output.current.no_config") + "\n")
 		}
 
 		data, err := os.ReadFile(authPath)
@@ -80,23 +81,23 @@ Use 'token-usage account switch opencode' to change it.`,
 			fmt.Fprintf(&out, "  %s%s\n", marker, name)
 
 			if p.Type != "" {
-				fmt.Fprintf(&out, "       Type: %s\n", p.Type)
+				fmt.Fprintf(&out, "       "+i18n.T("output.current.type")+"\n", p.Type)
 			}
 
 			if name == "opencode-go" && p.Key != "" {
 				keyID := auth.ExtractKeyID(p.Key)
-				fmt.Fprintf(&out, "       Key:  sk-...%s\n", keyID)
+				fmt.Fprintf(&out, "       "+i18n.T("output.current.key")+"\n", keyID)
 
 				if cfg != nil {
 					for _, pa := range cfg.AllAccounts() {
 						if pa.Data.KeyID == keyID {
-							fmt.Fprintf(&out, "       Account: %s/%s\n", pa.ProviderID, pa.Account)
+							fmt.Fprintf(&out, "       "+i18n.T("output.current.account")+"\n", pa.ProviderID, pa.Account)
 							break
 						}
 					}
 				}
 			} else if p.Key != "" {
-				fmt.Fprintf(&out, "       Key:  sk-...%s\n", auth.ExtractKeyID(p.Key))
+				fmt.Fprintf(&out, "       "+i18n.T("output.current.key")+"\n", auth.ExtractKeyID(p.Key))
 			}
 			fmt.Fprintln(&out)
 		}
