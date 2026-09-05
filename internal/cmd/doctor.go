@@ -10,8 +10,25 @@ import (
 
 	"github.com/emmmdty/token-usage/internal/auth"
 	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/provider"
 	"github.com/spf13/cobra"
 )
+
+// countProviders counts enabled providers (preset + custom).
+func countProviders(cfg *config.Config) int {
+	n := 0
+	for _, p := range cfg.Providers {
+		if p.Enabled {
+			n++
+		}
+	}
+	for _, c := range cfg.Custom {
+		if c.Enabled {
+			n++
+		}
+	}
+	return n
+}
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
@@ -30,11 +47,22 @@ var doctorCmd = &cobra.Command{
 			} else {
 				configureAuthFromConfig(cfg)
 				checks = append(checks, doctorCheck{name: "Config file", status: "OK", detail: configPath})
+				accounts := cfg.AllAccounts()
 				checks = append(checks, doctorCheck{
 					name:   "Accounts",
 					status: "OK",
-					detail: fmt.Sprintf("%d configured", len(cfg.Accounts)),
+					detail: fmt.Sprintf("%d configured across %d providers", len(accounts), countProviders(cfg)),
 				})
+				// arkcli availability matters for full Volcano quota windows.
+				if provider.ArkcliAvailable() {
+					checks = append(checks, doctorCheck{name: "arkcli", status: "OK", detail: "official ark CLI found"})
+				} else {
+					checks = append(checks, doctorCheck{
+						name:   "arkcli",
+						status: "WARN",
+						detail: "not installed; Volcano quota falls back to key probe (npm i -g @volcengine/ark-cli)",
+					})
+				}
 			}
 		}
 

@@ -6,19 +6,20 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"sync"
 
-	"github.com/emmmdty/token-usage/internal/auth"
-	"github.com/emmmdty/token-usage/internal/client"
 	"github.com/emmmdty/token-usage/internal/config"
 	"github.com/emmmdty/token-usage/internal/models"
+	"github.com/emmmdty/token-usage/internal/provider"
 	"github.com/emmmdty/token-usage/internal/tui"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
 type accountResult struct {
+	Provider  string        `json:"provider"`
+	Account   string        `json:"account"`
 	Name      string        `json:"name"`
+	PlanType  string        `json:"plan_type,omitempty"`
 	Usage     *models.Usage `json:"quota,omitempty"`
 	Error     string        `json:"error,omitempty"`
 	IsCurrent bool          `json:"is_current,omitempty"`
@@ -30,12 +31,73 @@ type quotaResponse struct {
 }
 
 var quotaCmd = &cobra.Command{
-	Use:     "quota",
+	Use:     "quota [account]",
 	Aliases: []string{"q"},
-	Short:   "View quota usage",
+	Short:   "View quota usage for all configured accounts",
+	Args:    cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runQuotaOverview(account, jsonOutput, outputFile)
+		accountFilter := account
+		if len(args) > 0 {
+			accountFilter = args[0]
+		}
+		return runQuotaOverview(accountFilter, jsonOutput, outputFile)
 	},
+}
+
+// fetchAndRender resolves targets, queries them concurrently, and hands the
+// results to the chosen renderer.
+func fetchAndRender(cfg *config.Config, providerFilter, accountFilter string, jsonOut bool) ([]accountResult, error) {
+	targets, notes, err := buildTargets(cfg, providerFilter, accountFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(targets) == 0 {
+		var extra string
+		for _, n := range notes {
+			extra += "\n  · " + n
+		}
+		if jsonOut {
+			resp := quotaResponse{Version: "2", Accounts: []accountResult{}}
+			err := printJSON(resp)
+			if err == nil && extra != "" {
+				fmt.Fprintln(os.Stderr, extra)
+			}
+			return nil, err
+		}
+		return nil, fmt.Errorf("no queryable accounts configured.%s\n  Run 'token-usage provider add' to get started.", extra)
+	}
+
+	if !jsonOut && term.IsTerminal(int(os.Stdout.Fd())) {
+		fmt.Fprintf(os.Stderr, "  Fetching %d accounts...\r", len(targets))
+	}
+
+	results := runQueryTargets(cfg, targets)
+
+	out := make([]accountResult, 0, len(results))
+	for _, r := range results {
+		ar := accountResult{
+			Provider:  r.Target.ProviderID,
+			Account:   r.Target.Account,
+			Name:      r.Target.Name,
+			IsCurrent: r.Target.IsCurrent,
+		}
+		if r.Err != nil {
+			ar.Error = r.Err.Error()
+		} else {
+			ar.Usage = models.FromProviderUsage(r.Usage)
+			ar.PlanType = r.Usage.PlanType
+		}
+		out = append(out, ar)
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Provider != out[j].Provider {
+			return out[i].Provider < out[j].Provider
+		}
+		return out[i].Account < out[j].Account
+	})
+	return out, nil
 }
 
 func runQuotaOverview(accountFilter string, jsonOut bool, outPath string) error {
@@ -43,154 +105,29 @@ func runQuotaOverview(accountFilter string, jsonOut bool, outPath string) error 
 	if err != nil {
 		return err
 	}
-
 	cfg, err := config.LoadOrCreateConfig(configPath)
 	if err != nil {
 		return err
 	}
 	configureAuthFromConfig(cfg)
 
-	accountsToQuery := make(map[string]config.Account)
-	if accountFilter != "" {
-		if acc, exists := cfg.Accounts[accountFilter]; exists {
-			accountsToQuery[accountFilter] = acc
-		} else {
-			return fmt.Errorf("account '%s' not found", accountFilter)
-		}
-	} else {
-		accountsToQuery = cfg.Accounts
+	// Accept "provider/account" or bare account filters.
+	providerFilter := ""
+	if idx := strings.Index(accountFilter, "/"); idx >= 0 {
+		providerFilter = accountFilter[:idx]
+		accountFilter = accountFilter[idx+1:]
 	}
 
-	if len(accountsToQuery) == 0 {
-		if jsonOut {
-			resp := quotaResponse{Version: "1", Accounts: []accountResult{}}
-			return printJSON(resp)
-		}
-		return writeOutput("  No accounts configured. Run 'token-usage account add' to get started.\n")
+	results, err := fetchAndRender(cfg, providerFilter, accountFilter, jsonOut)
+	if err != nil {
+		return err
 	}
-
-	currentAccount := resolveCurrentAccount(cfg)
-
-	if !jsonOut && !term.IsTerminal(int(os.Stdout.Fd())) {
-		// non-TTY: skip spinner
-	} else if !jsonOut {
-		fmt.Fprintf(os.Stderr, "  Fetching %d accounts...\r", len(accountsToQuery))
-	}
-
-	maxConcurrent := cfg.MaxConcurrentRequests
-	if maxConcurrent <= 0 {
-		maxConcurrent = 5
-	}
-	sem := make(chan struct{}, maxConcurrent)
-
-	// Resolve credentials for every account up front. This ensures any
-	// interactive master-password prompt happens before concurrent workers
-	// start, and surfaces a wrong password as a clean per-account error
-	// instead of a corrupted read.
-	type credResult struct {
-		name    string
-		apiKey  string
-		credErr error
-	}
-	creds := make([]credResult, 0, len(accountsToQuery))
-	for name := range accountsToQuery {
-		apiKey, err := auth.GetAPIKey("token-usage", name)
-		creds = append(creds, credResult{name: name, apiKey: apiKey, credErr: err})
-	}
-
-	var wg sync.WaitGroup
-	results := make(chan struct {
-		name  string
-		usage *models.Usage
-		err   error
-	}, len(creds))
-
-	for _, cred := range creds {
-		if cred.credErr != nil {
-			results <- struct {
-				name  string
-				usage *models.Usage
-				err   error
-			}{cred.name, nil, cred.credErr}
-			continue
-		}
-		wg.Add(1)
-		sem <- struct{}{}
-		go func(name, apiKey string) {
-			defer wg.Done()
-			defer func() { <-sem }()
-
-			c := client.NewClient(apiKey, "")
-			usage, err := c.GetUsage()
-			results <- struct {
-				name  string
-				usage *models.Usage
-				err   error
-			}{name, usage, err}
-		}(cred.name, cred.apiKey)
-	}
-
-	wg.Wait()
-	close(results)
-
-	var accountResults []accountResult
-	for result := range results {
-		ar := accountResult{
-			Name:      result.name,
-			IsCurrent: result.name == currentAccount,
-		}
-		if result.err != nil {
-			ar.Error = result.err.Error()
-		} else {
-			ar.Usage = result.usage
-		}
-		accountResults = append(accountResults, ar)
-	}
-
-	sort.Slice(accountResults, func(i, j int) bool {
-		return accountResults[i].Name < accountResults[j].Name
-	})
 
 	if jsonOut {
-		resp := quotaResponse{Version: "1", Accounts: accountResults}
+		resp := quotaResponse{Version: "2", Accounts: results}
 		return printJSON(resp)
 	}
-
-	return printQuotaTable(accountResults, cfg, currentAccount)
-}
-
-func resolveCurrentAccount(cfg *config.Config) string {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	authPath := homeDir + "/.local/share/opencode/auth.json"
-
-	data, err := os.ReadFile(authPath)
-	if err != nil {
-		return ""
-	}
-
-	var authProviders map[string]struct {
-		Type string `json:"type"`
-		Key  string `json:"key"`
-	}
-	if err := json.Unmarshal(data, &authProviders); err != nil {
-		return ""
-	}
-
-	provider, ok := authProviders["opencode-go"]
-	if !ok || provider.Key == "" {
-		return ""
-	}
-
-	tokenKeyID := auth.ExtractKeyID(provider.Key)
-	for name, acc := range cfg.Accounts {
-		if acc.KeyID == tokenKeyID {
-			return name
-		}
-	}
-	return ""
+	return printQuotaTable(results, cfg)
 }
 
 func printJSON(data interface{}) error {
@@ -203,13 +140,18 @@ func printJSON(data interface{}) error {
 	return writeOutput(buf.String())
 }
 
-func printQuotaTable(results []accountResult, cfg *config.Config, currentAccount string) error {
+func printQuotaTable(results []accountResult, cfg *config.Config) error {
 	tuiResults := make([]tui.AccountResult, len(results))
 	for i, r := range results {
+		var note string
+		if r.Usage != nil {
+			note = r.Usage.Note
+		}
 		tuiResults[i] = tui.AccountResult{
 			Name:      r.Name,
 			Usage:     r.Usage,
 			Error:     r.Error,
+			Note:      note,
 			IsCurrent: r.IsCurrent,
 		}
 	}
@@ -225,8 +167,14 @@ func printQuotaTable(results []accountResult, cfg *config.Config, currentAccount
 		style.DangerThreshold = 80
 	}
 
-	output := tui.FormatQuotaOverview(tuiResults, style, currentAccount)
+	output := tui.FormatQuotaOverview(tuiResults, style, "")
 	return writeOutput(output)
+}
+
+// makeProviderResult converts a provider.Usage into the JSON shape with the
+// provider-specific windows already mapped.
+func convertUsage(u *provider.Usage) *models.Usage {
+	return models.FromProviderUsage(u)
 }
 
 func init() {

@@ -18,6 +18,7 @@ type Usage struct {
 	Rolling QuotaWindow `json:"rolling"`
 	Weekly  QuotaWindow `json:"weekly"`
 	Monthly QuotaWindow `json:"monthly"`
+	Note    string      `json:"note,omitempty"`
 }
 
 // Model 表示一个可用模型
@@ -48,5 +49,6 @@ func FromProviderUsage(p *provider.Usage) *Usage {
 			Percent:  p.Monthly.Percent,
 			ResetsAt: p.Monthly.ResetAt,
 		},
+		Note: p.Note,
 	}
 }

@@ -82,9 +82,9 @@ var currentCmd = &cobra.Command{
 				fmt.Fprintf(&out, "       Key:  sk-...%s\n", keyID)
 
 				if cfg != nil {
-					for accountName, acc := range cfg.Accounts {
-						if acc.KeyID == keyID {
-							fmt.Fprintf(&out, "       Account: %s\n", accountName)
+					for _, pa := range cfg.AllAccounts() {
+						if pa.Data.KeyID == keyID {
+							fmt.Fprintf(&out, "       Account: %s/%s\n", pa.ProviderID, pa.Account)
 							break
 						}
 					}

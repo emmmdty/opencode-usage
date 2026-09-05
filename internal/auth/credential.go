@@ -101,6 +101,35 @@ func DeleteAPIKey(service, account string) error {
 	return deleteEncrypted(account)
 }
 
+// ListAccountKeys returns all stored account key names. Best-effort: on
+// failure it returns whatever is available (possibly nothing) instead of an
+// error, since callers use it for reconciliation/display only.
+func ListAccountKeys() []string {
+	if ring != nil {
+		keys, err := ring.Keys()
+		if err != nil {
+			return nil
+		}
+		out := make([]string, 0, len(keys))
+		for _, k := range keys {
+			if strings.HasPrefix(k, "__") {
+				continue // internal probe keys
+			}
+			out = append(out, k)
+		}
+		return out
+	}
+	secrets, err := loadEncrypted()
+	if err != nil || secrets == nil {
+		return nil
+	}
+	out := make([]string, 0, len(secrets))
+	for k := range secrets {
+		out = append(out, k)
+	}
+	return out
+}
+
 func ExtractKeyID(apiKey string) string {
 	if len(apiKey) > 6 {
 		return apiKey[len(apiKey)-6:]

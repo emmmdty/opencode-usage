@@ -1,29 +1,51 @@
 # token-usage
 
-Multi-provider AI coding tool usage monitor — query usage, available models, and quota information across OpenCode, Claude, Codex, and Volcengine.
+Multi-provider AI coding tool usage monitor — query quota usage and available models across OpenCode Go, Claude, Codex, Volcano Engine, and user-defined custom coding-plan providers.
 
 ## Features
 
-- **Multi-provider support** — Monitor OpenCode, Claude, Codex, and Volcengine usage in one place
-- **Multi-account management** — Add, remove, list, export, and import multiple accounts
-- **Account switching** — Switch active account with interactive menu or direct selection
-- **Quota monitoring** — View 5-hour rolling, weekly, and monthly usage across all providers
-- **Model listing** — See available models for your plan
-- **Current config** — Display the active configuration with provider details
-- **Diagnostics** — Run `doctor` to check configuration and connectivity
-- **Shell aliases** — Install/uninstall the `tu` shortcut
-- **JSON output** — Machine-readable output with `--json`
+- **Multi-provider support** — OpenCode Go, Claude, Codex, Volcano Engine (Coding/Agent Plan), plus custom providers (Z.ai GLM, Kimi, MiniMax, DeepSeek, openai-compatible)
+- **Provider → account hierarchy** — every provider supports multiple accounts
+- **Local login detection** — Claude/Codex/Opencode logins are auto-detected and offered for reuse without touching those files
+- **Custom providers with live validation** — a custom provider is only saved if its quota query actually works
+- **Quota monitoring** — 5-hour rolling, weekly, and monthly windows in one view
+- **Model listing** — see available models for your plan
+- **Diagnostics** — `doctor` checks config, keyring, arkcli, network, and connectivity
+- **Shell aliases** — install/uninstall the `tu` shortcut
+- **JSON output** — machine-readable output with `--json`
 - **Secure storage** — API keys stored in system keyring, with fallback to encrypted config
-- **Concurrent queries** — Parallel quota fetching with configurable concurrency
+- **Concurrent queries** — parallel quota fetching with configurable concurrency
 
 ## Supported Providers
 
 | Provider | Auth Method | Quota Windows |
 |----------|-------------|---------------|
-| **OpenCode** | API Key | 5h / Weekly / Monthly |
-| **Claude** | OAuth (auto-detect) | 5h / 7d |
-| **Codex** | OAuth (auto-detect) | 5h / 7d |
-| **Volcengine** | API Key | 5h / Weekly / Monthly |
+| **OpenCode Go** | API Key | 5h / Weekly / Monthly |
+| **Claude** | OAuth (auto-detected from Claude Code) | 5h / 7d |
+| **Codex** | OAuth (auto-detected from Codex) | 5h / 7d |
+| **Volcano Engine (Coding Plan)** | API key probe or official `arkcli` | session / Weekly / Monthly |
+| **Z.ai GLM (Coding Plan)** | API Key | token/credit limits |
+| **Kimi (Coding Plan)** | API Key | 5h / Weekly |
+| **MiniMax (Coding Plan)** | API Key | per-model remaining quota |
+| **DeepSeek** | API Key | balance (pay-as-you-go) |
+| **openai-compatible** | API Key | billing endpoints when available |
+
+### Volcano Engine quota
+
+Volcano (Ark) does not expose quota windows through plain API keys. `token-usage`
+therefore works in two modes:
+
+1. **arkcli mode (recommended)** — if the official [ark-cli](https://github.com/volcengine/ark-cli)
+   is installed and logged in (`npm i -g @volcengine/ark-cli && arkcli auth login`),
+   full 5h/weekly/monthly windows are fetched via `arkcli usage plan`. The CLI is
+   invoked with `ARKCLI_NO_UPDATE_NOTIFIER=1` and agent caller metadata, so no
+   silent updates or interactive prompts are triggered.
+2. **Probe mode** — otherwise the API key (auto-read from `~/.config/opencode/opencode.json`
+   or entered manually) is validated with a 1-token completion; usage shows `n/a`
+   with a hint to install arkcli.
+
+> Note: the ark-cli installer injects skills into local AI agents by default.
+> Set `ARKCLI_SKIP_POSTINSTALL=1` during installation to skip that.
 
 ## Installation
 
@@ -57,7 +79,7 @@ go build -o token-usage ./cmd/token-usage/
 
 ```bash
 # Just run it — shows usage across all configured providers
-token-usage providers
+token-usage
 
 # Or use the alias
 tu
@@ -65,43 +87,61 @@ tu
 
 ## Usage
 
-### Multi-provider view
+### Providers
 
 ```bash
-# View usage across all providers
-token-usage providers
+# List providers and their accounts
+token-usage provider list
 
-# JSON output
-token-usage providers --json
+# Add a provider (interactive menu: presets or custom)
+token-usage provider add
+
+# Add the Volcano Engine coding plan detected from opencode.json
+token-usage provider add volcengine --plan coding --use-local
+
+# Add a custom provider non-interactively (saved only if quota query works)
+token-usage provider add custom --name my-glm --query-type zai-glm \
+  --base-url https://api.z.ai --key <api-key>
+
+# Disable/remove
+token-usage provider disable claude
+token-usage provider remove my-glm
 ```
 
-### Account management (OpenCode)
+### Accounts (per provider)
 
 ```bash
-# Add an account (interactive prompt)
-token-usage account add
+# Add an account to a provider (presets detect local logins first)
+token-usage account add claude
+token-usage account add opencode work
 
-# List all accounts (-> marks the current one)
+# List accounts grouped by provider (-> marks the current one)
 token-usage account list
 
-# Switch active account (interactive menu)
-token-usage account switch
+# Mark the current account for a provider
+token-usage account switch volcengine coding
 
-# Export accounts (names + key IDs only, no secrets)
+# For opencode this also updates opencode's own auth.json
+token-usage account switch opencode work
+
+# Validate that quota querying works for an account
+token-usage account test opencode/work
+
+# Export/import metadata (no secrets)
 token-usage account export
-
-# Import accounts from file
 token-usage account import accounts.json
 ```
 
-### Quota (legacy OpenCode view)
+### Quota
 
 ```bash
-# View quota for all accounts
+# View quota for every account of every provider
 token-usage quota
 
-# View quota for a specific account
+# Filter: provider, account, or provider/account
+token-usage quota volcengine
 token-usage quota -n work
+token-usage quota -n opencode/work
 
 # JSON output
 token-usage quota --json
@@ -110,24 +150,20 @@ token-usage quota --json
 ### Models
 
 ```bash
-# List available models
+# List available models (opencode provider)
 token-usage models
 ```
 
 ### Diagnostics
 
 ```bash
-# Check configuration and connectivity
 token-usage doctor
 ```
 
 ### Shell alias
 
 ```bash
-# Install the 'tu' alias
-token-usage alias install
-
-# Uninstall the 'tu' alias
+token-usage alias install     # install the 'tu' alias
 token-usage alias uninstall
 ```
 
@@ -143,13 +179,15 @@ token-usage update
 | Command | Alias |
 |---------|-------|
 | `providers` | `p` |
+| `provider` | `pr` |
 | `account` | `a` |
 | `account add` | `aa` |
 | `account list` | `al` |
 | `account remove` | `ar` |
+| `account switch` | `sw` |
+| `account test` | `t` |
 | `account export` | `ae` |
 | `account import` | `ai` |
-| `account switch` | `sw` |
 | `quota` | `q` |
 | `models` | `m` |
 | `current` | `cc` |
@@ -169,63 +207,48 @@ token-usage update
 Config file: `~/.config/token-usage/config.yaml`
 
 ```yaml
-version: "2"
-accounts:
-  work:
-    name: work
-    key_id: "sk-...abc123"
-    created_at: 2026-01-01T00:00:00Z
-    last_verified: 2026-01-15T12:00:00Z
+version: "3"
 providers:
+  opencode:
+    enabled: true
+    default_account: work
+    accounts:
+      work:
+        source: manual        # key stored in the credential store
+        key_id: "abc123"      # last 6 chars only
+      personal:
+        source: manual
   claude:
     enabled: true
     creds_path: ~/.claude/.credentials.json
+    accounts:
+      local:
+        source: local         # read from the Claude Code login
   codex:
     enabled: true
     auth_path: ~/.codex/auth.json
+    accounts:
+      local:
+        source: local
   volcengine:
-    enabled: false
-    api_key: "your-api-key"
+    enabled: true
+    accounts:
+      coding-plan:
+        source: local         # API key auto-read from opencode.json
+        plan: coding          # coding | agent
+custom:
+  my-glm:
+    query_type: zai-glm       # zai-glm | kimi | minimax | deepseek | openai-compatible
+    base_url: https://api.z.ai
+    enabled: true
+    accounts:
+      main:
+        source: manual
 color_thresholds:
   warning: 50
   danger: 80
 max_concurrent_requests: 5
 use_master_password: false
-```
-
-### Provider configuration
-
-#### Claude
-
-Claude credentials are auto-detected from `~/.claude/.credentials.json`. Run `claude` CLI first to authenticate.
-
-```yaml
-providers:
-  claude:
-    enabled: true
-    creds_path: ~/.claude/.credentials.json
-```
-
-#### Codex
-
-Codex credentials are auto-detected from `~/.codex/auth.json`. Run `codex` CLI first to authenticate.
-
-```yaml
-providers:
-  codex:
-    enabled: true
-    auth_path: ~/.codex/auth.json
-```
-
-#### Volcengine
-
-Requires API Key from [Volcengine Console](https://console.volcengine.com/).
-
-```yaml
-providers:
-  volcengine:
-    enabled: true
-    api_key: "your-api-key"
 ```
 
 ### Configuration options
@@ -234,6 +257,8 @@ providers:
 |--------|---------|-------------|
 | `providers.*.enabled` | true | Enable/disable provider |
 | `providers.*.endpoint` | - | Custom API endpoint |
+| `providers.*.default_account` | - | Current-account marker |
+| `custom.*.query_type` | required | Built-in query implementation |
 | `color_thresholds.warning` | 50 | Quota percentage to trigger warning color |
 | `color_thresholds.danger` | 80 | Quota percentage to trigger danger color |
 | `max_concurrent_requests` | 5 | Max parallel API requests |
@@ -246,6 +271,7 @@ providers:
 | `NO_COLOR` | Disable color output (see [no-color.org](https://no-color.org)) |
 | `TOKEN_USAGE_MASTER_PASSWORD` | Master password for encrypted storage |
 | `TOKEN_USAGE_KEYRING_PASSWORD` | Password for keyring file backend |
+| `ARKCLI_SKIP_POSTINSTALL` | Skip ark-cli installer side effects (agent skill injection) |
 
 ## Security
 

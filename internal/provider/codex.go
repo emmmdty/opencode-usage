@@ -14,6 +14,9 @@ import (
 type CodexProvider struct {
 	authPath string
 	endpoint string
+	// accessToken, when set, is used directly instead of reading the local
+	// auth file (manual accounts).
+	accessToken string
 }
 
 func NewCodexProvider(authPath string) *CodexProvider {
@@ -31,11 +34,25 @@ func NewCodexProviderWithEndpoint(authPath, endpoint string) *CodexProvider {
 	return p
 }
 
+// NewCodexProviderWithToken builds a provider that uses a pasted OAuth
+// access token instead of the local auth file.
+func NewCodexProviderWithToken(accessToken, endpoint string) *CodexProvider {
+	p := NewCodexProvider("")
+	p.accessToken = accessToken
+	if endpoint != "" {
+		p.endpoint = endpoint
+	}
+	return p
+}
+
 func (p *CodexProvider) Name() string {
 	return "codex"
 }
 
 func (p *CodexProvider) IsAvailable() bool {
+	if p.accessToken != "" {
+		return true
+	}
 	_, err := os.Stat(p.authPath)
 	return err == nil
 }
@@ -48,6 +65,9 @@ type codexAuth struct {
 }
 
 func (p *CodexProvider) loadAuth() (*codexAuth, error) {
+	if p.accessToken != "" {
+		return &codexAuth{}, nil
+	}
 	data, err := os.ReadFile(p.authPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read auth file: %w", err)
@@ -77,7 +97,11 @@ func (p *CodexProvider) GetUsage() (*Usage, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+auth.Tokens.AccessToken)
+	token := p.accessToken
+	if token == "" {
+		token = auth.Tokens.AccessToken
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "codex-cli/0.58.0")
 

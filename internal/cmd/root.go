@@ -33,7 +33,11 @@ var rootCmd = &cobra.Command{
 	Use:     "token-usage [provider]",
 	Aliases: []string{"tu"},
 	Short:   "Multi-provider AI coding tool usage monitor",
-	Long:    "Monitor usage across OpenCode, Claude, Codex, and Volcengine providers.",
+	Long: `Token Usage — monitor quota usage across AI coding providers.
+
+Supported providers: OpenCode Go, Claude, Codex, Volcano Engine (Coding/Agent
+Plan), and user-defined custom providers (Z.ai GLM, Kimi, MiniMax, DeepSeek,
+openai-compatible).`,
 	Version: version.Version,
 	Args:    cobra.MaximumNArgs(1),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {

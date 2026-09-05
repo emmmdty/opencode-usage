@@ -18,6 +18,9 @@ type ClaudeProvider struct {
 	endpoint  string
 	cache     *claudeCache
 	mu        sync.RWMutex
+	// accessToken, when set, is used directly instead of reading the local
+	// credentials file (manual accounts).
+	accessToken string
 	// cachePath 用于测试隔离；为空时使用默认路径 ~/.config/token-usage/claude_cache.json
 	cachePath string
 }
@@ -42,11 +45,30 @@ func NewClaudeProviderWithEndpoint(credsPath, endpoint string) *ClaudeProvider {
 	return p
 }
 
+// NewClaudeProviderWithToken builds a provider that uses a pasted OAuth
+// access token instead of the local credentials file.
+func NewClaudeProviderWithToken(accessToken, endpoint string) *ClaudeProvider {
+	return &ClaudeProvider{
+		accessToken: accessToken,
+		endpoint:    defaultIfEmpty(endpoint, "https://api.anthropic.com"),
+	}
+}
+
+func defaultIfEmpty(v, def string) string {
+	if v == "" {
+		return def
+	}
+	return v
+}
+
 func (p *ClaudeProvider) Name() string {
 	return "claude"
 }
 
 func (p *ClaudeProvider) IsAvailable() bool {
+	if p.accessToken != "" {
+		return true
+	}
 	_, err := os.Stat(p.credsPath)
 	return err == nil
 }
@@ -60,6 +82,9 @@ type claudeCredentials struct {
 }
 
 func (p *ClaudeProvider) loadCredentials() (*claudeCredentials, error) {
+	if p.accessToken != "" {
+		return &claudeCredentials{}, nil
+	}
 	data, err := os.ReadFile(p.credsPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read credentials: %w", err)
@@ -103,7 +128,11 @@ func (p *ClaudeProvider) GetUsage() (*Usage, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+creds.ClaudeAiOauth.AccessToken)
+	token := p.accessToken
+	if token == "" {
+		token = creds.ClaudeAiOauth.AccessToken
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("anthropic-beta", "oauth-2025-04-20")
 
 	client := &http.Client{Timeout: 10 * time.Second}

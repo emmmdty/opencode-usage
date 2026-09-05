@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -15,232 +14,498 @@ import (
 
 	"github.com/emmmdty/token-usage/internal/auth"
 	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/provider"
 	"github.com/mattn/go-runewidth"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 )
 
 var accountCmd = &cobra.Command{
 	Use:     "account",
 	Aliases: []string{"a"},
-	Short:   "Manage Token Usage accounts",
+	Short:   "Manage accounts per provider",
 }
 
+var (
+	acctProvider string
+	acctKey      string
+	acctUseLocal bool
+	acctPlan     string
+)
+
 var accountAddCmd = &cobra.Command{
-	Use:     "add",
-	Aliases: []string{"aa"},
-	Short:   "Add a new account",
+	Use:   "add [provider] [name]",
+	Short: "Add an account to a provider",
+	Long: `Add an account to a provider.
+
+Presets (claude, codex, volcengine) detect local logins and offer to reuse
+them without touching those files. With no arguments this is interactive.`,
+	Args: cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		reader := bufio.NewReader(os.Stdin)
-
-		fmt.Print("Account name: ")
-		name, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("failed to read account name: %w", err)
+		providerID := acctProvider
+		name := ""
+		if len(args) > 0 {
+			providerID = args[0]
 		}
-		name = strings.TrimSpace(name)
-		if name == "" {
-			return fmt.Errorf("account name cannot be empty")
-		}
-		if strings.ContainsAny(name, "\n\x00:") {
-			return fmt.Errorf("account name cannot contain newline, NUL, or ':' characters")
+		if len(args) > 1 {
+			name = args[1]
 		}
 
-		fmt.Print("API Key: ")
-		apiKeyBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-		if err != nil {
-			return fmt.Errorf("failed to read API key: %w", err)
-		}
-		fmt.Println()
-		apiKey := strings.TrimSpace(string(apiKeyBytes))
-		if apiKey == "" {
-			return fmt.Errorf("API key cannot be empty")
-		}
-
-		fmt.Println("Validating API key...")
-		result, err := auth.ValidateAPIKey(apiKey, "")
-		if err != nil {
-			return fmt.Errorf("error validating API key: %w", err)
-		}
-		if !result.Valid {
-			return fmt.Errorf("invalid API key: %s", result.Message)
-		}
-
-		configPath, err := getConfigPath()
+		cfgPath, err := getConfigPath()
 		if err != nil {
 			return err
 		}
-
-		cfg, err := config.LoadOrCreateConfig(configPath)
+		cfg, err := config.LoadOrCreateConfig(cfgPath)
 		if err != nil {
 			return err
 		}
 		configureAuthFromConfig(cfg)
 
-		if _, exists := cfg.Accounts[name]; exists {
-			return fmt.Errorf("account '%s' already exists", name)
-		}
-
-		// Store the key first: if it fails, config is untouched.
-		if err := auth.StoreAPIKey("token-usage", name, apiKey); err != nil {
-			return fmt.Errorf("failed to store API key: %w", err)
-		}
-
-		cfg.Accounts[name] = config.Account{
-			Name:         name,
-			KeyID:        auth.ExtractKeyID(apiKey),
-			CreatedAt:    time.Now(),
-			LastVerified: time.Now(),
-		}
-
-		if err := config.SaveConfig(cfg, configPath); err != nil {
-			delete(cfg.Accounts, name)
-			if delErr := auth.DeleteAPIKey("token-usage", name); delErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to roll back stored API key for '%s': %v\n", name, delErr)
+		reader := bufio.NewReader(os.Stdin)
+		if providerID == "" {
+			var known []string
+			for _, pa := range cfg.AllAccounts() {
+				known = appendUnique(known, pa.ProviderID)
 			}
+			for id := range cfg.Providers {
+				known = appendUnique(known, id)
+			}
+			sort.Strings(known)
+			idx, err := promptSelect(reader, "Provider:", known)
+			if err != nil {
+				return err
+			}
+			providerID = known[idx]
+		}
+
+		if _, _, err := cfg.FindProvider(providerID); err != nil {
+			return fmt.Errorf("provider '%s' not found; add it first with 'token-usage provider add'", providerID)
+		}
+
+		if isCustom(cfg, providerID) {
+			return addCustomAccount(cfg, cfgPath, reader, providerID, name)
+		}
+		return addPresetProvider(cfg, cfgPath, reader, providerID, addOpts{
+			name:     name,
+			apiKey:   acctKey,
+			useLocal: acctUseLocal,
+			plan:     acctPlan,
+		})
+	},
+}
+
+func appendUnique(list []string, v string) []string {
+	for _, item := range list {
+		if item == v {
+			return list
+		}
+	}
+	return append(list, v)
+}
+
+func isCustom(cfg *config.Config, id string) bool {
+	_, ok := cfg.Custom[id]
+	return ok
+}
+
+// addCustomAccount stores an additional API key under an existing custom
+// provider, validating it live first.
+func addCustomAccount(cfg *config.Config, cfgPath string, reader *bufio.Reader, providerID, name string) error {
+	custom := cfg.Custom[providerID]
+	q, _ := provider.LookupKeyQuery(custom.QueryType)
+
+	apiKey := acctKey
+	if apiKey == "" {
+		secret, err := promptSecret("  API Key: ")
+		if err != nil {
 			return err
 		}
+		apiKey = secret
+	}
+	if apiKey == "" {
+		return fmt.Errorf("API key cannot be empty")
+	}
 
-		fmt.Printf("Account '%s' added successfully\n", name)
-		fmt.Println("Run 'token-usage quota' to view all accounts.")
-		return nil
-	},
+	accountName := name
+	if accountName == "" {
+		v, err := promptInput(reader, "  Account name: ")
+		if err != nil {
+			return err
+		}
+		accountName = v
+	}
+	if strings.ContainsAny(accountName, "/\n\x00:") {
+		return fmt.Errorf("account name cannot contain '/', newline, NUL, or ':' characters")
+	}
+	if _, exists := custom.Accounts[accountName]; exists {
+		return fmt.Errorf("account '%s' already exists for provider '%s'", accountName, providerID)
+	}
+
+	fmt.Println("  Validating quota query...")
+	if _, err := q(apiKey, custom.BaseURL); err != nil {
+		fmt.Fprintf(os.Stderr, "\n  %v\n", err)
+		return fmt.Errorf("account was NOT saved (validation failed)")
+	}
+
+	if err := auth.StoreAPIKey("token-usage", providerID+"/"+accountName, apiKey); err != nil {
+		return fmt.Errorf("failed to store API key: %w", err)
+	}
+	custom.Accounts[accountName] = config.Account{
+		Source:       config.SourceManual,
+		KeyID:        auth.ExtractKeyID(apiKey),
+		CreatedAt:    timeNow(),
+		LastVerified: timeNow(),
+	}
+	cfg.Custom[providerID] = custom
+	if err := config.SaveConfig(cfg, cfgPath); err != nil {
+		_ = auth.DeleteAPIKey("token-usage", providerID+"/"+accountName)
+		return err
+	}
+	fmt.Printf("\n  Account '%s' added to provider '%s'\n", accountName, providerID)
+	return nil
 }
 
 var accountListCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"al"},
-	Short:   "List all accounts",
+	Short:   "List accounts grouped by provider",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		configPath, err := getConfigPath()
+		cfgPath, err := getConfigPath()
 		if err != nil {
 			return err
 		}
-
-		cfg, err := config.LoadOrCreateConfig(configPath)
+		cfg, err := config.LoadOrCreateConfig(cfgPath)
 		if err != nil {
 			return err
 		}
 		configureAuthFromConfig(cfg)
 
-		if len(cfg.Accounts) == 0 {
-			return writeOutput("No accounts configured. Run 'token-usage account add' to get started.\n")
+		return writeOutput(renderAccountList(cfg, acctProvider))
+	},
+}
+
+func renderAccountList(cfg *config.Config, providerFilter string) string {
+	// Group accounts by provider in stable order.
+	type group struct {
+		id       string
+		display  string
+		def      string
+		accounts []config.ProviderAccount
+	}
+	groups := map[string]*group{}
+	var order []string
+	for _, pa := range cfg.AllAccounts() {
+		if providerFilter != "" && pa.ProviderID != providerFilter {
+			continue
 		}
-
-		currentAccount := resolveCurrentAccount(cfg)
-
-		names := make([]string, 0, len(cfg.Accounts))
-		for name := range cfg.Accounts {
-			names = append(names, name)
+		g, ok := groups[pa.ProviderID]
+		if !ok {
+			g = &group{
+				id:      pa.ProviderID,
+				display: displayName(pa.ProviderID, pa.Data.Plan, customPtr(cfg, pa.ProviderID)),
+				def:     defaultAccountFor(cfg, pa.ProviderID),
+			}
+			groups[pa.ProviderID] = g
+			order = append(order, pa.ProviderID)
 		}
-		sort.Strings(names)
+		g.accounts = append(g.accounts, pa)
+	}
+	if len(order) == 0 {
+		return "No accounts configured. Run 'token-usage provider add' to get started.\n"
+	}
+	sort.Strings(order)
 
-		nameWidth := 7
-		for _, name := range names {
-			w := runewidth.StringWidth(name)
+	nameWidth := 7
+	for _, id := range order {
+		for _, pa := range groups[id].accounts {
+			w := runewidth.StringWidth(pa.ProviderID + "/" + pa.Account)
 			if w+2 > nameWidth {
 				nameWidth = w + 2
 			}
 		}
+	}
 
-		var out strings.Builder
-		for _, name := range names {
-			account := cfg.Accounts[name]
+	var out strings.Builder
+	out.WriteString("\n")
+	for _, id := range order {
+		g := groups[id]
+		fmt.Fprintf(&out, "  %s\n", g.display)
+		for _, pa := range g.accounts {
+			acc := pa.Data
 			status := "unverified"
 			lastVerified := "never"
-			if !account.LastVerified.IsZero() {
-				lastVerified = formatRelativeTime(account.LastVerified)
-				if time.Since(account.LastVerified) < 24*time.Hour {
+			if !acc.LastVerified.IsZero() {
+				lastVerified = formatRelativeTime(acc.LastVerified)
+				if time.Since(acc.LastVerified) < 24*time.Hour {
 					status = "ok"
 				} else {
 					status = "stale"
 				}
 			}
-
 			marker := "  "
-			if name == currentAccount {
+			if pa.Account == g.def {
 				marker = "-> "
 			}
-
-			keyID := "sk-..." + account.KeyID
-			paddedName := name + strings.Repeat(" ", nameWidth-runewidth.StringWidth(name))
-
-			fmt.Fprintf(&out, "  %s%s  Key: %-12s  Status: %-10s  Last verified: %s\n",
-				marker, paddedName, keyID, status, lastVerified)
+			keyID := ""
+			if acc.KeyID != "" {
+				keyID = "  Key: sk-..." + acc.KeyID
+			}
+			padded := pa.ProviderID + "/" + pa.Account
+			padded += strings.Repeat(" ", nameWidth-runewidth.StringWidth(padded))
+			fmt.Fprintf(&out, "  %s%s  Source: %-5s %s  Status: %-10s  Last verified: %s\n",
+				marker, padded, acc.Source, keyID, status, lastVerified)
 		}
-		return writeOutput(out.String())
-	},
-}
-
-func formatRelativeTime(t time.Time) string {
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		mins := int(d.Minutes())
-		if mins == 1 {
-			return "1 min ago"
-		}
-		return fmt.Sprintf("%d mins ago", mins)
-	case d < 24*time.Hour:
-		hours := int(d.Hours())
-		if hours == 1 {
-			return "1 hour ago"
-		}
-		return fmt.Sprintf("%d hours ago", hours)
-	case d < 30*24*time.Hour:
-		days := int(d.Hours() / 24)
-		if days == 1 {
-			return "1 day ago"
-		}
-		return fmt.Sprintf("%d days ago", days)
-	default:
-		return t.Format("2006-01-02")
+		out.WriteString("\n")
 	}
+	return out.String()
 }
 
 var accountRemoveCmd = &cobra.Command{
-	Use:     "remove",
+	Use:     "remove <provider> <account>",
 	Aliases: []string{"ar"},
 	Short:   "Remove an account",
-	Args:    cobra.ExactArgs(1),
+	Args:    cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		accountName := args[0]
-
-		configPath, err := getConfigPath()
+		cfgPath, err := getConfigPath()
 		if err != nil {
 			return err
 		}
-
-		cfg, err := config.LoadOrCreateConfig(configPath)
+		cfg, err := config.LoadOrCreateConfig(cfgPath)
 		if err != nil {
 			return err
 		}
 		configureAuthFromConfig(cfg)
 
-		if _, exists := cfg.Accounts[accountName]; !exists {
-			return fmt.Errorf("account '%s' not found", accountName)
-		}
-
-		delete(cfg.Accounts, accountName)
-
-		if err := config.SaveConfig(cfg, configPath); err != nil {
+		providerID, accountName, err := resolveProviderAccount(cfg, args)
+		if err != nil {
 			return err
 		}
 
-		if err := auth.DeleteAPIKey("token-usage", accountName); err != nil {
-			return fmt.Errorf("account removed from config but key deletion failed: %w", err)
+		if p, ok := cfg.Providers[providerID]; ok {
+			delete(p.Accounts, accountName)
+			if p.DefaultAccount == accountName {
+				p.DefaultAccount = ""
+			}
+			cfg.Providers[providerID] = p
+		} else if c, ok := cfg.Custom[providerID]; ok {
+			delete(c.Accounts, accountName)
+			if c.DefaultAccount == accountName {
+				c.DefaultAccount = ""
+			}
+			cfg.Custom[providerID] = c
 		}
 
-		fmt.Printf("Account '%s' removed\n", accountName)
+		if err := config.SaveConfig(cfg, cfgPath); err != nil {
+			return err
+		}
+
+		if err := auth.DeleteAPIKey("token-usage", providerID+"/"+accountName); err != nil {
+			return fmt.Errorf("account removed from config but key deletion failed: %w", err)
+		}
+		fmt.Printf("Account '%s/%s' removed\n", providerID, accountName)
 		return nil
 	},
 }
 
+// resolveProviderAccount turns CLI args into a (provider, account) pair.
+// Accepts "provider account" or just "account" when the name is unique.
+func resolveProviderAccount(cfg *config.Config, args []string) (string, string, error) {
+	if len(args) == 2 {
+		providerID, accountName := args[0], args[1]
+		accounts, _, err := cfg.FindProvider(providerID)
+		if err != nil {
+			return "", "", err
+		}
+		if _, ok := accounts[accountName]; !ok {
+			return "", "", fmt.Errorf("account '%s' not found for provider '%s'", accountName, providerID)
+		}
+		return providerID, accountName, nil
+	}
+	if len(args) == 1 {
+		parts := strings.SplitN(args[0], "/", 2)
+		if len(parts) == 2 {
+			return resolveProviderAccount(cfg, parts)
+		}
+		var matches []config.ProviderAccount
+		for _, pa := range cfg.AllAccounts() {
+			if pa.Account == args[0] {
+				matches = append(matches, pa)
+			}
+		}
+		switch len(matches) {
+		case 0:
+			return "", "", fmt.Errorf("account '%s' not found", args[0])
+		case 1:
+			return matches[0].ProviderID, matches[0].Account, nil
+		default:
+			var ids []string
+			for _, m := range matches {
+				ids = append(ids, m.ProviderID+"/"+m.Account)
+			}
+			return "", "", fmt.Errorf("account '%s' is ambiguous (%s); specify provider", args[0], strings.Join(ids, ", "))
+		}
+	}
+	return "", "", fmt.Errorf("usage: token-usage account remove <provider> <account>")
+}
+
+var accountSwitchCmd = &cobra.Command{
+	Use:     "switch [provider] [account]",
+	Aliases: []string{"sw"},
+	Short:   "Mark an account as current",
+	Long: `Mark an account as the current one for its provider.
+
+For the opencode provider this also writes the key into opencode's own
+auth.json (the classic switch), so the change applies to opencode after
+running /connect there. Other providers only record the current marker used
+  by 'quota' and 'providers' output.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfgPath, err := getConfigPath()
+		if err != nil {
+			return err
+		}
+		cfg, err := config.LoadOrCreateConfig(cfgPath)
+		if err != nil {
+			return err
+		}
+		configureAuthFromConfig(cfg)
+
+		// A single argument that names an existing provider means "pick an
+		// account of that provider interactively".
+		if len(args) == 1 && !strings.Contains(args[0], "/") {
+			if accounts, _, err := cfg.FindProvider(args[0]); err == nil {
+				names := sortedAccountNames(accounts)
+				if len(names) == 0 {
+					return fmt.Errorf("provider '%s' has no accounts", args[0])
+				}
+				if len(names) == 1 {
+					args = []string{args[0], names[0]}
+				} else {
+					reader := bufio.NewReader(os.Stdin)
+					opts := make([]string, len(names))
+					def := defaultAccountFor(cfg, args[0])
+					for i, n := range names {
+						marker := ""
+						if n == def {
+							marker = " (current)"
+						}
+						keyID := accounts[n].KeyID
+						if keyID != "" {
+							keyID = "  sk-..." + keyID
+						}
+						opts[i] = n + keyID + marker
+					}
+					idx, err := promptSelect(reader, "Switch account for '"+args[0]+"':", opts)
+					if err != nil {
+						return err
+					}
+					args = []string{args[0], names[idx]}
+				}
+			}
+		}
+
+		providerID, accountName, err := resolveProviderAccount(cfg, args)
+		if err != nil {
+			return err
+		}
+
+		// Record the marker.
+		if p, ok := cfg.Providers[providerID]; ok {
+			p.DefaultAccount = accountName
+			cfg.Providers[providerID] = p
+		} else if c, ok := cfg.Custom[providerID]; ok {
+			c.DefaultAccount = accountName
+			cfg.Custom[providerID] = c
+		}
+		if err := config.SaveConfig(cfg, cfgPath); err != nil {
+			return err
+		}
+
+		fmt.Printf("  Current account for '%s': %s\n", providerID, accountName)
+
+		// opencode extra behavior: sync opencode auth.json.
+		if providerID == "opencode" {
+			apiKey, err := resolveStoredKey(providerID, accountName)
+			if err != nil {
+				return fmt.Errorf("failed to retrieve API key: %w", err)
+			}
+			providers, err := readAuthJSON()
+			if err != nil {
+				return err
+			}
+			providers["opencode-go"] = authProvider{Type: "api", Key: apiKey}
+			if err := writeAuthJSON(providers); err != nil {
+				return err
+			}
+			fmt.Printf("  opencode auth.json updated (sk-...%s)\n", auth.ExtractKeyID(apiKey))
+			if switchClipboard {
+				if err := copyToClipboard(apiKey); err != nil {
+					fmt.Printf("  Could not copy key to clipboard: %v\n", err)
+				} else {
+					fmt.Println("  API key copied to clipboard!")
+					fmt.Println("  WARNING: Clear it after use (run 'token-usage account clear-clipboard').")
+				}
+			}
+			fmt.Println("  Run /connect in opencode to apply the change.")
+		}
+		return nil
+	},
+}
+
+var accountTestCmd = &cobra.Command{
+	Use:     "test [provider] [account]",
+	Aliases: []string{"t"},
+	Short:   "Validate that quota querying works for an account",
+	Args:    cobra.MaximumNArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfgPath, err := getConfigPath()
+		if err != nil {
+			return err
+		}
+		cfg, err := config.LoadOrCreateConfig(cfgPath)
+		if err != nil {
+			return err
+		}
+		configureAuthFromConfig(cfg)
+
+		providerID, accountName, err := resolveProviderAccount(cfg, args)
+		if err != nil {
+			return err
+		}
+
+		targets, _, err := buildTargets(cfg, providerID, accountName)
+		if err != nil {
+			return err
+		}
+		if len(targets) == 0 {
+			return fmt.Errorf("cannot build a query for %s/%s (missing credentials or disabled provider)", providerID, accountName)
+		}
+
+		fmt.Printf("  Testing %s/%s...\n", providerID, accountName)
+		usage, err := targets[0].query()
+		if err != nil {
+			return fmt.Errorf("FAILED: %w", err)
+		}
+		touchLastVerified(cfg, providerID, accountName, cfgPath)
+		fmt.Printf("  OK: plan=%s rolling=%s%% weekly=%s%% monthly=%s%%\n",
+			usage.PlanType,
+			windowPct(usage.Rolling), windowPct(usage.Weekly), windowPct(usage.Monthly))
+		if usage.Note != "" {
+			fmt.Printf("  %s\n", usage.Note)
+		}
+		return nil
+	},
+}
+
+func windowPct(w provider.QuotaWindow) string {
+	if w.Status == provider.StatusUnknown {
+		return "n/a"
+	}
+	return strconv.Itoa(w.Percent)
+}
+
 type ExportAccount struct {
-	Name  string `json:"name"`
-	KeyID string `json:"key_id"`
+	Provider string `json:"provider"`
+	Name     string `json:"name"`
+	KeyID    string `json:"key_id"`
 }
 
 type ExportData struct {
@@ -248,8 +513,9 @@ type ExportData struct {
 }
 
 type ImportAccount struct {
-	Name   string `json:"name"`
-	APIKey string `json:"api_key"`
+	Provider string `json:"provider,omitempty"`
+	Name     string `json:"name"`
+	APIKey   string `json:"api_key"`
 }
 
 type ImportData struct {
@@ -259,40 +525,34 @@ type ImportData struct {
 var accountExportCmd = &cobra.Command{
 	Use:     "export",
 	Aliases: []string{"ae"},
-	Short:   "Export account configuration",
+	Short:   "Export account metadata (no secrets)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		configPath, err := getConfigPath()
+		cfgPath, err := getConfigPath()
 		if err != nil {
 			return err
 		}
-
-		cfg, err := config.LoadOrCreateConfig(configPath)
+		cfg, err := config.LoadOrCreateConfig(cfgPath)
 		if err != nil {
 			return err
 		}
 		configureAuthFromConfig(cfg)
 
-		if len(cfg.Accounts) == 0 {
-			return fmt.Errorf("no accounts configured")
-		}
-
 		var exportData ExportData
-		for name, account := range cfg.Accounts {
+		for _, pa := range cfg.AllAccounts() {
 			exportData.Accounts = append(exportData.Accounts, ExportAccount{
-				Name:  name,
-				KeyID: account.KeyID,
+				Provider: pa.ProviderID,
+				Name:     pa.Account,
+				KeyID:    pa.Data.KeyID,
 			})
 		}
-
-		sort.Slice(exportData.Accounts, func(i, j int) bool {
-			return exportData.Accounts[i].Name < exportData.Accounts[j].Name
-		})
+		if len(exportData.Accounts) == 0 {
+			return fmt.Errorf("no accounts configured")
+		}
 
 		jsonData, err := json.MarshalIndent(exportData, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to serialize JSON: %w", err)
 		}
-
 		if outputFile != "" {
 			if err := os.WriteFile(outputFile, jsonData, 0600); err != nil {
 				return fmt.Errorf("failed to write file: %w", err)
@@ -306,112 +566,102 @@ var accountExportCmd = &cobra.Command{
 }
 
 var accountImportCmd = &cobra.Command{
-	Use:     "import",
+	Use:     "import <file>",
 	Aliases: []string{"ai"},
-	Short:   "Import account configuration",
+	Short:   "Import accounts from a JSON file",
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		filePath := args[0]
-
-		data, err := os.ReadFile(filePath)
+		data, err := os.ReadFile(args[0])
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
-
 		var importData ImportData
 		if err := json.Unmarshal(data, &importData); err != nil {
 			return fmt.Errorf("failed to parse JSON: %w", err)
 		}
-
 		if len(importData.Accounts) == 0 {
 			return fmt.Errorf("no importable accounts found")
 		}
 
-		configPath, err := getConfigPath()
+		cfgPath, err := getConfigPath()
 		if err != nil {
 			return err
 		}
-
-		cfg, err := config.LoadOrCreateConfig(configPath)
+		cfg, err := config.LoadOrCreateConfig(cfgPath)
 		if err != nil {
 			return err
 		}
 		configureAuthFromConfig(cfg)
 
 		var imported, skipped int
-		for _, account := range importData.Accounts {
-			if account.Name == "" || account.APIKey == "" {
-				fmt.Printf("Skipping invalid entry: name=%q\n", account.Name)
+		for _, entry := range importData.Accounts {
+			providerID := entry.Provider
+			if providerID == "" {
+				providerID = "opencode" // legacy exports were opencode keys
+			}
+			if entry.Name == "" || entry.APIKey == "" {
+				fmt.Printf("Skipping invalid entry: name=%q\n", entry.Name)
+				skipped++
+				continue
+			}
+			if strings.ContainsAny(entry.Name, "/\n\x00:") {
+				fmt.Printf("Skipping account '%s': invalid characters\n", entry.Name)
 				skipped++
 				continue
 			}
 
-			if strings.ContainsAny(account.Name, "\n\x00:") {
-				fmt.Printf("Skipping account '%s': name contains invalid characters\n", account.Name)
-				skipped++
-				continue
-			}
-
-			if _, exists := cfg.Accounts[account.Name]; exists {
-				fmt.Printf("Skipping existing account: '%s'\n", account.Name)
-				skipped++
-				continue
-			}
-
-			fmt.Printf("Validating account '%s'...\n", account.Name)
-			result, err := auth.ValidateAPIKey(account.APIKey, "")
+			accounts, _, err := cfg.FindProvider(providerID)
 			if err != nil {
-				fmt.Printf("Skipping account '%s': validation error: %v\n", account.Name, err)
+				fmt.Printf("Skipping account '%s': unknown provider '%s'\n", entry.Name, providerID)
 				skipped++
 				continue
 			}
-			if !result.Valid {
-				fmt.Printf("Skipping account '%s': invalid key: %s\n", account.Name, result.Message)
-				skipped++
-				continue
-			}
-
-			if err := auth.StoreAPIKey("token-usage", account.Name, account.APIKey); err != nil {
-				fmt.Printf("Skipping account '%s': storage error: %v\n", account.Name, err)
+			if _, exists := accounts[entry.Name]; exists {
+				fmt.Printf("Skipping existing account: '%s/%s'\n", providerID, entry.Name)
 				skipped++
 				continue
 			}
 
-			cfg.Accounts[account.Name] = config.Account{
-				Name:         account.Name,
-				KeyID:        auth.ExtractKeyID(account.APIKey),
-				CreatedAt:    time.Now(),
-				LastVerified: time.Now(),
-			}
-
-			if err := config.SaveConfig(cfg, configPath); err != nil {
-				_ = auth.DeleteAPIKey("token-usage", account.Name)
-				fmt.Printf("Skipping account '%s': config save error: %v\n", account.Name, err)
+			if err := auth.StoreAPIKey("token-usage", providerID+"/"+entry.Name, entry.APIKey); err != nil {
+				fmt.Printf("Skipping account '%s': storage error: %v\n", entry.Name, err)
 				skipped++
 				continue
 			}
 
-			fmt.Printf("Imported account '%s'\n", account.Name)
+			acc := config.Account{
+				Source:    config.SourceManual,
+				KeyID:     auth.ExtractKeyID(entry.APIKey),
+				CreatedAt: timeNow(),
+			}
+			if p, ok := cfg.Providers[providerID]; ok {
+				if p.Accounts == nil {
+					p.Accounts = map[string]config.Account{}
+				}
+				p.Accounts[entry.Name] = acc
+				cfg.Providers[providerID] = p
+			} else if c, ok := cfg.Custom[providerID]; ok {
+				c.Accounts[entry.Name] = acc
+				cfg.Custom[providerID] = c
+			}
+			if err := config.SaveConfig(cfg, cfgPath); err != nil {
+				_ = auth.DeleteAPIKey("token-usage", providerID+"/"+entry.Name)
+				fmt.Printf("Skipping account '%s': config save error: %v\n", entry.Name, err)
+				skipped++
+				continue
+			}
+			fmt.Printf("Imported account '%s/%s'\n", providerID, entry.Name)
 			imported++
 		}
-
 		fmt.Printf("\nImport complete: %d imported, %d skipped\n", imported, skipped)
 		return nil
 	},
 }
 
 func readAuthJSON() (map[string]authProvider, error) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
-	}
-	authPath := filepath.Join(homeDir, ".local", "share", "opencode", "auth.json")
-
-	data, err := os.ReadFile(authPath)
+	data, err := os.ReadFile(opencodeAuthPath())
 	if err != nil {
 		return nil, fmt.Errorf("failed to read auth.json: %w", err)
 	}
-
 	var providers map[string]authProvider
 	if err := json.Unmarshal(data, &providers); err != nil {
 		return nil, fmt.Errorf("failed to parse auth.json: %w", err)
@@ -420,28 +670,19 @@ func readAuthJSON() (map[string]authProvider, error) {
 }
 
 func writeAuthJSON(providers map[string]authProvider) error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home directory: %w", err)
-	}
-	authDir := filepath.Join(homeDir, ".local", "share", "opencode")
-	authPath := filepath.Join(authDir, "auth.json")
-
+	authDir := filepathDir(opencodeAuthPath())
 	if err := os.MkdirAll(authDir, 0700); err != nil {
 		return fmt.Errorf("failed to create auth directory: %w", err)
 	}
-
 	data, err := json.MarshalIndent(providers, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal auth.json: %w", err)
 	}
-
 	tmpFile, err := os.CreateTemp(authDir, "auth.json.tmp.*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
 	tmpPath := tmpFile.Name()
-
 	if _, err := tmpFile.Write(data); err != nil {
 		tmpFile.Close()
 		os.Remove(tmpPath)
@@ -456,138 +697,18 @@ func writeAuthJSON(providers map[string]authProvider) error {
 		os.Remove(tmpPath)
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
-
 	if err := os.Chmod(tmpPath, 0600); err != nil {
 		os.Remove(tmpPath)
 		return fmt.Errorf("failed to set permissions: %w", err)
 	}
-
-	if err := os.Rename(tmpPath, authPath); err != nil {
+	if err := os.Rename(tmpPath, opencodeAuthPath()); err != nil {
 		os.Remove(tmpPath)
 		return fmt.Errorf("failed to replace auth.json: %w", err)
 	}
-
 	return nil
 }
 
 var switchClipboard bool
-
-var accountSwitchCmd = &cobra.Command{
-	Use:     "switch [account-name]",
-	Aliases: []string{"sw"},
-	Short:   "Switch active opencode-go account",
-	Long: `Switch the opencode-go API key used by opencode.
-
-Without arguments, shows an interactive numbered menu to select an account.
-With an argument, switches directly to the named account.
-
-The switch updates ~/.local/share/opencode/auth.json. You still need to
-run /connect in opencode for the change to take effect (opencode does not
-hot-reload auth.json).
-
-Use --clipboard to copy the API key to the system clipboard for easy
-pasting during /connect. Clear the clipboard afterwards with:
-  tu account clear-clipboard`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		configPath, err := getConfigPath()
-		if err != nil {
-			return err
-		}
-
-		cfg, err := config.LoadOrCreateConfig(configPath)
-		if err != nil {
-			return err
-		}
-		configureAuthFromConfig(cfg)
-
-		if len(cfg.Accounts) == 0 {
-			return fmt.Errorf("no accounts configured. Run 'token-usage account add' to get started")
-		}
-
-		names := make([]string, 0, len(cfg.Accounts))
-		for name := range cfg.Accounts {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-
-		var targetName string
-
-		if len(args) == 1 {
-			targetName = args[0]
-			if _, exists := cfg.Accounts[targetName]; !exists {
-				return fmt.Errorf("account '%s' not found", targetName)
-			}
-		} else {
-			currentAccount := resolveCurrentAccount(cfg)
-
-			fmt.Println()
-			fmt.Println("  Available accounts:")
-			fmt.Println()
-			for i, name := range names {
-				marker := "  "
-				if name == currentAccount {
-					marker = "-> "
-				}
-				keyID := "sk-..." + cfg.Accounts[name].KeyID
-				fmt.Printf("  %s%d) %-30s %s\n", marker, i+1, name, keyID)
-			}
-			fmt.Println()
-
-			fmt.Print("  Select account [number]: ")
-			reader := bufio.NewReader(os.Stdin)
-			input, err := reader.ReadString('\n')
-			if err != nil {
-				return fmt.Errorf("failed to read input: %w", err)
-			}
-			input = strings.TrimSpace(input)
-
-			var idx int
-			if idx, err = strconv.Atoi(input); err != nil || idx < 1 || idx > len(names) {
-				return fmt.Errorf("invalid selection: %s", input)
-			}
-			targetName = names[idx-1]
-		}
-
-		apiKey, err := auth.GetAPIKey("token-usage", targetName)
-		if err != nil {
-			return fmt.Errorf("failed to retrieve API key for '%s': %w", targetName, err)
-		}
-
-		providers, err := readAuthJSON()
-		if err != nil {
-			return err
-		}
-
-		providers["opencode-go"] = authProvider{
-			Type: "api",
-			Key:  apiKey,
-		}
-
-		if err := writeAuthJSON(providers); err != nil {
-			return err
-		}
-
-		keyID := auth.ExtractKeyID(apiKey)
-		fmt.Printf("\n  Switched to account: %s (sk-...%s)\n", targetName, keyID)
-
-		if switchClipboard {
-			if err := copyToClipboard(apiKey); err != nil {
-				fmt.Printf("  Could not copy key to clipboard: %v\n", err)
-				fmt.Println("  Run /connect in opencode and enter the key manually.")
-			} else {
-				fmt.Println("  API key copied to clipboard!")
-				fmt.Println("  Run /connect in opencode, then Ctrl+V to paste.")
-				fmt.Println("  WARNING: Clear your clipboard after use (e.g. run 'tu account clear-clipboard').")
-			}
-		} else {
-			fmt.Println("  Run /connect in opencode to apply the change.")
-			fmt.Println("  Tip: use --clipboard to copy the key for easy pasting.")
-		}
-		fmt.Println()
-
-		return nil
-	},
-}
 
 func copyToClipboard(text string) error {
 	var cmd *exec.Cmd
@@ -628,13 +749,20 @@ var clearClipboardCmd = &cobra.Command{
 }
 
 func init() {
-	accountSwitchCmd.Flags().BoolVarP(&switchClipboard, "clipboard", "c", false, "copy API key to clipboard after switching")
+	accountAddCmd.Flags().StringVarP(&acctProvider, "provider", "p", "", "target provider")
+	accountAddCmd.Flags().StringVar(&acctKey, "key", "", "API key (prompts interactively when omitted)")
+	accountAddCmd.Flags().BoolVar(&acctUseLocal, "use-local", false, "reuse the locally detected account")
+	accountAddCmd.Flags().StringVar(&acctPlan, "plan", "", "volcengine plan (coding|agent)")
+	accountListCmd.Flags().StringVarP(&acctProvider, "provider", "p", "", "filter by provider")
+
 	accountCmd.AddCommand(accountAddCmd)
 	accountCmd.AddCommand(accountListCmd)
 	accountCmd.AddCommand(accountRemoveCmd)
+	accountCmd.AddCommand(accountSwitchCmd)
+	accountCmd.AddCommand(accountTestCmd)
 	accountCmd.AddCommand(accountExportCmd)
 	accountCmd.AddCommand(accountImportCmd)
-	accountCmd.AddCommand(accountSwitchCmd)
 	accountCmd.AddCommand(clearClipboardCmd)
+	accountSwitchCmd.Flags().BoolVarP(&switchClipboard, "clipboard", "c", false, "copy API key to clipboard after switching (opencode only)")
 	rootCmd.AddCommand(accountCmd)
 }

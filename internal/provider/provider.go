@@ -11,6 +11,16 @@ type QuotaWindow struct {
 	ResetAt time.Time `json:"resetAt"`
 }
 
+// StatusUnknown marks a window whose usage cannot be determined (e.g. the
+// provider only exposes a validity probe). Rendered as "n/a".
+const StatusUnknown = "unknown"
+
+// Plan flavors for providers that carry multiple subscription types.
+const (
+	PlanCoding = "coding"
+	PlanAgent  = "agent"
+)
+
 // Usage 表示配额使用情况
 type Usage struct {
 	Provider string      `json:"provider"`
@@ -18,7 +28,10 @@ type Usage struct {
 	Rolling  QuotaWindow `json:"rolling"`
 	Weekly   QuotaWindow `json:"weekly"`
 	Monthly  QuotaWindow `json:"monthly"`
-	RawData  interface{} `json:"rawData,omitempty"`
+	// Note carries human-readable context when windows cannot be fully
+	// resolved (e.g. "balance: $12.34", "install arkcli for full quota").
+	Note    string      `json:"note,omitempty"`
+	RawData interface{} `json:"rawData,omitempty"`
 }
 
 // Provider 定义了获取用量数据的接口

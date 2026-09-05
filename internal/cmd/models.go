@@ -5,18 +5,21 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/emmmdty/token-usage/internal/auth"
 	"github.com/emmmdty/token-usage/internal/client"
 	"github.com/emmmdty/token-usage/internal/config"
 	"github.com/spf13/cobra"
 )
 
 var modelsCmd = &cobra.Command{
-	Use:     "models",
+	Use:     "models [account]",
 	Aliases: []string{"m"},
-	Short:   "List available models",
+	Short:   "List available models (opencode provider)",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		apiKey, err := getAPIKeyForCommand()
+		accountName := account
+		if len(args) > 0 {
+			accountName = args[0]
+		}
+		apiKey, err := getAPIKeyForCommand(accountName)
 		if err != nil {
 			return err
 		}
@@ -44,7 +47,10 @@ var modelsCmd = &cobra.Command{
 	},
 }
 
-func getAPIKeyForCommand() (string, error) {
+// getAPIKeyForCommand resolves an opencode account key. Accepts either the
+// bare account name or "provider/account"; defaults to the first opencode
+// account.
+func getAPIKeyForCommand(accountName string) (string, error) {
 	configPath, err := getConfigPath()
 	if err != nil {
 		return "", err
@@ -56,21 +62,25 @@ func getAPIKeyForCommand() (string, error) {
 	}
 	configureAuthFromConfig(cfg)
 
-	if account != "" {
-		return auth.GetAPIKey("token-usage", account)
+	if accountName != "" {
+		if idx := strings.Index(accountName, "/"); idx >= 0 {
+			return resolveStoredKey(accountName[:idx], accountName[idx+1:])
+		}
+		return resolveStoredKey("opencode", accountName)
 	}
 
-	if len(cfg.Accounts) == 0 {
-		return "", fmt.Errorf("no accounts configured. Run 'token-usage account add' first")
+	var names []string
+	for _, pa := range cfg.AllAccounts() {
+		if pa.ProviderID == "opencode" {
+			names = append(names, pa.Account)
+		}
 	}
-
-	names := make([]string, 0, len(cfg.Accounts))
-	for name := range cfg.Accounts {
-		names = append(names, name)
+	if len(names) == 0 {
+		return "", fmt.Errorf("no opencode accounts configured. Run 'token-usage account add opencode' first")
 	}
 	sort.Strings(names)
 
-	return auth.GetAPIKey("token-usage", names[0])
+	return resolveStoredKey("opencode", names[0])
 }
 
 func init() {

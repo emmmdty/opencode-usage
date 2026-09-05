@@ -22,9 +22,9 @@ func TestFormatQuotaOverviewSingleAccount(t *testing.T) {
 		{
 			Name: "work",
 			Usage: &models.Usage{
-				Rolling: models.QuotaWindow{Percent: 35, ResetsAt: time.Now().Add(8 * time.Hour)},
-				Weekly:  models.QuotaWindow{Percent: 12, ResetsAt: time.Now().Add(5 * 24 * time.Hour)},
-				Monthly: models.QuotaWindow{Percent: 8, ResetsAt: time.Now().Add(23 * 24 * time.Hour)},
+				Rolling: models.QuotaWindow{Status: "ok", Percent: 35, ResetsAt: time.Now().Add(8 * time.Hour)},
+				Weekly:  models.QuotaWindow{Status: "ok", Percent: 12, ResetsAt: time.Now().Add(5 * 24 * time.Hour)},
+				Monthly: models.QuotaWindow{Status: "ok", Percent: 8, ResetsAt: time.Now().Add(23 * 24 * time.Hour)},
 			},
 		},
 	}
@@ -44,14 +44,14 @@ func TestFormatQuotaOverviewSingleAccount(t *testing.T) {
 func TestFormatQuotaOverviewCurrentAccount(t *testing.T) {
 	results := []AccountResult{
 		{Name: "work", Usage: &models.Usage{
-			Rolling: models.QuotaWindow{Percent: 35, ResetsAt: time.Now().Add(8 * time.Hour)},
-			Weekly:  models.QuotaWindow{Percent: 12, ResetsAt: time.Now().Add(5 * 24 * time.Hour)},
-			Monthly: models.QuotaWindow{Percent: 8, ResetsAt: time.Now().Add(23 * 24 * time.Hour)},
+			Rolling: models.QuotaWindow{Status: "ok", Percent: 35, ResetsAt: time.Now().Add(8 * time.Hour)},
+			Weekly:  models.QuotaWindow{Status: "ok", Percent: 12, ResetsAt: time.Now().Add(5 * 24 * time.Hour)},
+			Monthly: models.QuotaWindow{Status: "ok", Percent: 8, ResetsAt: time.Now().Add(23 * 24 * time.Hour)},
 		}},
 		{Name: "personal", Usage: &models.Usage{
-			Rolling: models.QuotaWindow{Percent: 67, ResetsAt: time.Now().Add(2 * time.Hour)},
-			Weekly:  models.QuotaWindow{Percent: 45, ResetsAt: time.Now().Add(3 * 24 * time.Hour)},
-			Monthly: models.QuotaWindow{Percent: 22, ResetsAt: time.Now().Add(18 * 24 * time.Hour)},
+			Rolling: models.QuotaWindow{Status: "ok", Percent: 67, ResetsAt: time.Now().Add(2 * time.Hour)},
+			Weekly:  models.QuotaWindow{Status: "ok", Percent: 45, ResetsAt: time.Now().Add(3 * 24 * time.Hour)},
+			Monthly: models.QuotaWindow{Status: "ok", Percent: 22, ResetsAt: time.Now().Add(18 * 24 * time.Hour)},
 		}},
 	}
 	style := DefaultQuotaStyle()
@@ -67,9 +67,9 @@ func TestFormatQuotaOverviewCurrentAccount(t *testing.T) {
 func TestFormatQuotaOverviewPartialFailure(t *testing.T) {
 	results := []AccountResult{
 		{Name: "work", Usage: &models.Usage{
-			Rolling: models.QuotaWindow{Percent: 35, ResetsAt: time.Now().Add(8 * time.Hour)},
-			Weekly:  models.QuotaWindow{Percent: 12, ResetsAt: time.Now().Add(5 * 24 * time.Hour)},
-			Monthly: models.QuotaWindow{Percent: 8, ResetsAt: time.Now().Add(23 * 24 * time.Hour)},
+			Rolling: models.QuotaWindow{Status: "ok", Percent: 35, ResetsAt: time.Now().Add(8 * time.Hour)},
+			Weekly:  models.QuotaWindow{Status: "ok", Percent: 12, ResetsAt: time.Now().Add(5 * 24 * time.Hour)},
+			Monthly: models.QuotaWindow{Status: "ok", Percent: 8, ResetsAt: time.Now().Add(23 * 24 * time.Hour)},
 		}},
 		{Name: "backup", Error: "API error: HTTP 401"},
 	}
@@ -89,14 +89,14 @@ func TestFormatQuotaOverviewPartialFailure(t *testing.T) {
 func TestFormatQuotaOverviewCJK(t *testing.T) {
 	results := []AccountResult{
 		{Name: "生产环境", Usage: &models.Usage{
-			Rolling: models.QuotaWindow{Percent: 80, ResetsAt: time.Now().Add(4 * time.Hour)},
-			Weekly:  models.QuotaWindow{Percent: 50, ResetsAt: time.Now().Add(3 * 24 * time.Hour)},
-			Monthly: models.QuotaWindow{Percent: 30, ResetsAt: time.Now().Add(15 * 24 * time.Hour)},
+			Rolling: models.QuotaWindow{Status: "ok", Percent: 80, ResetsAt: time.Now().Add(4 * time.Hour)},
+			Weekly:  models.QuotaWindow{Status: "ok", Percent: 50, ResetsAt: time.Now().Add(3 * 24 * time.Hour)},
+			Monthly: models.QuotaWindow{Status: "ok", Percent: 30, ResetsAt: time.Now().Add(15 * 24 * time.Hour)},
 		}},
 		{Name: "personal", Usage: &models.Usage{
-			Rolling: models.QuotaWindow{Percent: 20, ResetsAt: time.Now().Add(6 * time.Hour)},
-			Weekly:  models.QuotaWindow{Percent: 10, ResetsAt: time.Now().Add(4 * 24 * time.Hour)},
-			Monthly: models.QuotaWindow{Percent: 5, ResetsAt: time.Now().Add(20 * 24 * time.Hour)},
+			Rolling: models.QuotaWindow{Status: "ok", Percent: 20, ResetsAt: time.Now().Add(6 * time.Hour)},
+			Weekly:  models.QuotaWindow{Status: "ok", Percent: 10, ResetsAt: time.Now().Add(4 * 24 * time.Hour)},
+			Monthly: models.QuotaWindow{Status: "ok", Percent: 5, ResetsAt: time.Now().Add(20 * 24 * time.Hour)},
 		}},
 	}
 	style := DefaultQuotaStyle()
@@ -162,14 +162,14 @@ func TestPadRight(t *testing.T) {
 func TestComputeSummary(t *testing.T) {
 	results := []AccountResult{
 		{Name: "a", Usage: &models.Usage{
-			Rolling: models.QuotaWindow{Percent: 30},
-			Weekly:  models.QuotaWindow{Percent: 20},
-			Monthly: models.QuotaWindow{Percent: 10},
+			Rolling: models.QuotaWindow{Status: "ok", Percent: 30},
+			Weekly:  models.QuotaWindow{Status: "ok", Percent: 20},
+			Monthly: models.QuotaWindow{Status: "ok", Percent: 10},
 		}},
 		{Name: "b", Usage: &models.Usage{
-			Rolling: models.QuotaWindow{Percent: 60},
-			Weekly:  models.QuotaWindow{Percent: 55},
-			Monthly: models.QuotaWindow{Percent: 40},
+			Rolling: models.QuotaWindow{Status: "ok", Percent: 60},
+			Weekly:  models.QuotaWindow{Status: "ok", Percent: 55},
+			Monthly: models.QuotaWindow{Status: "ok", Percent: 40},
 		}},
 		{Name: "c", Error: "timeout"},
 	}
@@ -191,14 +191,14 @@ func TestComputeSummary(t *testing.T) {
 func TestFindBestAccount(t *testing.T) {
 	results := []AccountResult{
 		{Name: "heavy", Usage: &models.Usage{
-			Rolling: models.QuotaWindow{Percent: 80},
-			Weekly:  models.QuotaWindow{Percent: 70},
-			Monthly: models.QuotaWindow{Percent: 60},
+			Rolling: models.QuotaWindow{Status: "ok", Percent: 80},
+			Weekly:  models.QuotaWindow{Status: "ok", Percent: 70},
+			Monthly: models.QuotaWindow{Status: "ok", Percent: 60},
 		}},
 		{Name: "light", Usage: &models.Usage{
-			Rolling: models.QuotaWindow{Percent: 10},
-			Weekly:  models.QuotaWindow{Percent: 5},
-			Monthly: models.QuotaWindow{Percent: 2},
+			Rolling: models.QuotaWindow{Status: "ok", Percent: 10},
+			Weekly:  models.QuotaWindow{Status: "ok", Percent: 5},
+			Monthly: models.QuotaWindow{Status: "ok", Percent: 2},
 		}},
 		{Name: "errored", Error: "fail"},
 	}
@@ -233,9 +233,9 @@ func TestFormatQuotaOverviewCompactWidth(t *testing.T) {
 
 	results := []AccountResult{
 		{Name: "work", Usage: &models.Usage{
-			Rolling: models.QuotaWindow{Percent: 35, ResetsAt: time.Now().Add(8 * time.Hour)},
-			Weekly:  models.QuotaWindow{Percent: 12, ResetsAt: time.Now().Add(5 * 24 * time.Hour)},
-			Monthly: models.QuotaWindow{Percent: 8, ResetsAt: time.Now().Add(23 * 24 * time.Hour)},
+			Rolling: models.QuotaWindow{Status: "ok", Percent: 35, ResetsAt: time.Now().Add(8 * time.Hour)},
+			Weekly:  models.QuotaWindow{Status: "ok", Percent: 12, ResetsAt: time.Now().Add(5 * 24 * time.Hour)},
+			Monthly: models.QuotaWindow{Status: "ok", Percent: 8, ResetsAt: time.Now().Add(23 * 24 * time.Hour)},
 		}},
 	}
 	style := DefaultQuotaStyle()
@@ -277,17 +277,17 @@ func TestQuotaTableColumnAlignment(t *testing.T) {
 		{
 			Name: "a@example.com",
 			Usage: &models.Usage{
-				Rolling: models.QuotaWindow{Percent: 25, ResetsAt: time.Now().Add(61 * time.Minute)},
-				Weekly:  models.QuotaWindow{Percent: 37, ResetsAt: time.Now().Add(4*24*time.Hour + 8*time.Hour)},
-				Monthly: models.QuotaWindow{Percent: 65, ResetsAt: time.Now().Add(26 * 24 * time.Hour)},
+				Rolling: models.QuotaWindow{Status: "ok", Percent: 25, ResetsAt: time.Now().Add(61 * time.Minute)},
+				Weekly:  models.QuotaWindow{Status: "ok", Percent: 37, ResetsAt: time.Now().Add(4*24*time.Hour + 8*time.Hour)},
+				Monthly: models.QuotaWindow{Status: "ok", Percent: 65, ResetsAt: time.Now().Add(26 * 24 * time.Hour)},
 			},
 		},
 		{
 			Name: "longer-name@example.com",
 			Usage: &models.Usage{
-				Rolling: models.QuotaWindow{Percent: 1, ResetsAt: time.Now().Add(2 * time.Hour)},
-				Weekly:  models.QuotaWindow{Percent: 12, ResetsAt: time.Now().Add(4*24*time.Hour + 8*time.Hour)},
-				Monthly: models.QuotaWindow{Percent: 3, ResetsAt: time.Now().Add(18*24*time.Hour + 16*time.Hour)},
+				Rolling: models.QuotaWindow{Status: "ok", Percent: 1, ResetsAt: time.Now().Add(2 * time.Hour)},
+				Weekly:  models.QuotaWindow{Status: "ok", Percent: 12, ResetsAt: time.Now().Add(4*24*time.Hour + 8*time.Hour)},
+				Monthly: models.QuotaWindow{Status: "ok", Percent: 3, ResetsAt: time.Now().Add(18*24*time.Hour + 16*time.Hour)},
 			},
 		},
 	}

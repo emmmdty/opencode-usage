@@ -14,6 +14,7 @@ type AccountResult struct {
 	Name      string
 	Usage     *models.Usage
 	Error     string
+	Note      string
 	IsCurrent bool
 }
 
@@ -151,9 +152,12 @@ func formatCompact(results []AccountResult, style QuotaStyle, theme Theme) strin
 			}
 			b.WriteString(fmt.Sprintf("  %s%s\n", marker, theme.Bold.Render(result.Name)))
 			b.WriteString(fmt.Sprintf("    5H: %s  W: %s  M: %s\n",
-				formatPercentCompact(result.Usage.Rolling.Percent, style, theme),
-				formatPercentCompact(result.Usage.Weekly.Percent, style, theme),
-				formatPercentCompact(result.Usage.Monthly.Percent, style, theme)))
+				formatPercentCompact(result.Usage.Rolling, style, theme),
+				formatPercentCompact(result.Usage.Weekly, style, theme),
+				formatPercentCompact(result.Usage.Monthly, style, theme)))
+			if result.Note != "" {
+				b.WriteString(fmt.Sprintf("    %s\n", theme.Muted.Render(truncateError(result.Note, 60))))
+			}
 		}
 	}
 
@@ -178,7 +182,11 @@ func formatCompact(results []AccountResult, style QuotaStyle, theme Theme) strin
 	return b.String()
 }
 
-func formatPercentCompact(percent int, style QuotaStyle, theme Theme) string {
+func formatPercentCompact(window models.QuotaWindow, style QuotaStyle, theme Theme) string {
+	if window.Status != "ok" {
+		return theme.Muted.Render("n/a")
+	}
+	percent := window.Percent
 	s := fmt.Sprintf("%d%%", percent)
 	switch {
 	case percent >= style.DangerThreshold:
@@ -207,23 +215,33 @@ func formatQuotaRow(result AccountResult, nameWidth, colWidth, barWidth int, sty
 	}
 
 	name := theme.Account.Render(padRight(result.Name, nameWidth))
-	rolling := formatQuotaCell(result.Usage.Rolling.Percent, result.Usage.Rolling.ResetsAt, barWidth, style, theme)
-	weekly := formatQuotaCell(result.Usage.Weekly.Percent, result.Usage.Weekly.ResetsAt, barWidth, style, theme)
-	monthly := formatQuotaCell(result.Usage.Monthly.Percent, result.Usage.Monthly.ResetsAt, barWidth, style, theme)
+	rolling := formatQuotaCell(result.Usage.Rolling, barWidth, style, theme)
+	weekly := formatQuotaCell(result.Usage.Weekly, barWidth, style, theme)
+	monthly := formatQuotaCell(result.Usage.Monthly, barWidth, style, theme)
 
-	return "  " + marker + name + "  " +
+	row := "  " + marker + name + "  " +
 		lipgloss.PlaceHorizontal(colWidth, lipgloss.Left, rolling) +
 		"  " +
 		lipgloss.PlaceHorizontal(colWidth, lipgloss.Left, weekly) +
 		"  " +
-		lipgloss.PlaceHorizontal(colWidth, lipgloss.Left, monthly) +
-		"\n"
+		lipgloss.PlaceHorizontal(colWidth, lipgloss.Left, monthly)
+
+	if result.Note != "" {
+		row += "\n" + theme.Muted.Render(fmt.Sprintf("    ↳ %s", result.Note))
+	}
+	return row + "\n"
 }
 
-func formatQuotaCell(percent int, resetsAt time.Time, barWidth int, style QuotaStyle, theme Theme) string {
-	bar := renderBar(percent, barWidth, style, theme)
-	pct := formatPercent(percent, style, theme)
-	reset := theme.Muted.Render(" " + formatResetTimeFixed(resetsAt))
+// windowStatus reports anything that is not a resolved "ok" window
+// (unknown placeholders, empty status from providers without that window)
+// as n/a instead of a misleading 0%.
+func formatQuotaCell(window models.QuotaWindow, barWidth int, style QuotaStyle, theme Theme) string {
+	if window.Status != "ok" {
+		return theme.Muted.Render(padRight("n/a", barWidth+13))
+	}
+	bar := renderBar(window.Percent, barWidth, style, theme)
+	pct := formatPercent(window.Percent, style, theme)
+	reset := theme.Muted.Render(" " + formatResetTimeFixed(window.ResetsAt))
 	return bar + " " + pct + reset
 }
 
@@ -321,17 +339,16 @@ func computeSummary(results []AccountResult, style QuotaStyle) string {
 	warnings := 0
 	criticals := 0
 	errors := 0
+	unknowns := 0
 	for _, r := range results {
 		if r.Error != "" {
 			errors++
 			continue
 		}
-		maxPercent := r.Usage.Rolling.Percent
-		if r.Usage.Weekly.Percent > maxPercent {
-			maxPercent = r.Usage.Weekly.Percent
-		}
-		if r.Usage.Monthly.Percent > maxPercent {
-			maxPercent = r.Usage.Monthly.Percent
+		maxPercent, hasData := maxKnownPercent(r.Usage)
+		if !hasData {
+			unknowns++
+			continue
 		}
 		if maxPercent >= style.DangerThreshold {
 			criticals++
@@ -352,6 +369,9 @@ func computeSummary(results []AccountResult, style QuotaStyle) string {
 	if criticals > 0 {
 		parts = append(parts, fmt.Sprintf("%d critical", criticals))
 	}
+	if unknowns > 0 {
+		parts = append(parts, fmt.Sprintf("%d unknown", unknowns))
+	}
 	if errors > 0 {
 		parts = append(parts, fmt.Sprintf("%d error", errors))
 	}
@@ -363,6 +383,24 @@ func computeSummary(results []AccountResult, style QuotaStyle) string {
 	return fmt.Sprintf("%d %s  %s", total, noun, strings.Join(parts, "  "))
 }
 
+// maxKnownPercent returns the highest percentage across windows that carry
+// real data. Windows with status != "ok" (unknown placeholders) are ignored;
+// hasData is false when no window resolved.
+func maxKnownPercent(u *models.Usage) (int, bool) {
+	maxPercent := 0
+	hasData := false
+	for _, w := range []models.QuotaWindow{u.Rolling, u.Weekly, u.Monthly} {
+		if w.Status != "ok" {
+			continue
+		}
+		hasData = true
+		if w.Percent > maxPercent {
+			maxPercent = w.Percent
+		}
+	}
+	return maxPercent, hasData
+}
+
 func findBestAccount(results []AccountResult) string {
 	bestName := ""
 	bestPercent := 101
@@ -371,12 +409,9 @@ func findBestAccount(results []AccountResult) string {
 		if r.Error != "" {
 			continue
 		}
-		maxPercent := r.Usage.Rolling.Percent
-		if r.Usage.Weekly.Percent > maxPercent {
-			maxPercent = r.Usage.Weekly.Percent
-		}
-		if r.Usage.Monthly.Percent > maxPercent {
-			maxPercent = r.Usage.Monthly.Percent
+		maxPercent, hasData := maxKnownPercent(r.Usage)
+		if !hasData {
+			continue // unknown usage cannot be compared
 		}
 		if maxPercent < bestPercent {
 			bestPercent = maxPercent
