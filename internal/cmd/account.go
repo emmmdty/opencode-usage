@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emmmdty/opencode-usage/internal/auth"
-	"github.com/emmmdty/opencode-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/auth"
+	"github.com/emmmdty/token-usage/internal/config"
 	"github.com/mattn/go-runewidth"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -23,7 +23,7 @@ import (
 var accountCmd = &cobra.Command{
 	Use:     "account",
 	Aliases: []string{"a"},
-	Short:   "Manage OpenCode Go accounts",
+	Short:   "Manage Token Usage accounts",
 }
 
 var accountAddCmd = &cobra.Command{
@@ -82,7 +82,7 @@ var accountAddCmd = &cobra.Command{
 		}
 
 		// Store the key first: if it fails, config is untouched.
-		if err := auth.StoreAPIKey("opencode-usage", name, apiKey); err != nil {
+		if err := auth.StoreAPIKey("token-usage", name, apiKey); err != nil {
 			return fmt.Errorf("failed to store API key: %w", err)
 		}
 
@@ -95,14 +95,14 @@ var accountAddCmd = &cobra.Command{
 
 		if err := config.SaveConfig(cfg, configPath); err != nil {
 			delete(cfg.Accounts, name)
-			if delErr := auth.DeleteAPIKey("opencode-usage", name); delErr != nil {
+			if delErr := auth.DeleteAPIKey("token-usage", name); delErr != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to roll back stored API key for '%s': %v\n", name, delErr)
 			}
 			return err
 		}
 
 		fmt.Printf("Account '%s' added successfully\n", name)
-		fmt.Println("Run 'opencode-usage quota' to view all accounts.")
+		fmt.Println("Run 'token-usage quota' to view all accounts.")
 		return nil
 	},
 }
@@ -124,7 +124,7 @@ var accountListCmd = &cobra.Command{
 		configureAuthFromConfig(cfg)
 
 		if len(cfg.Accounts) == 0 {
-			return writeOutput("No accounts configured. Run 'opencode-usage account add' to get started.\n")
+			return writeOutput("No accounts configured. Run 'token-usage account add' to get started.\n")
 		}
 
 		currentAccount := resolveCurrentAccount(cfg)
@@ -229,7 +229,7 @@ var accountRemoveCmd = &cobra.Command{
 			return err
 		}
 
-		if err := auth.DeleteAPIKey("opencode-usage", accountName); err != nil {
+		if err := auth.DeleteAPIKey("token-usage", accountName); err != nil {
 			return fmt.Errorf("account removed from config but key deletion failed: %w", err)
 		}
 
@@ -371,7 +371,7 @@ var accountImportCmd = &cobra.Command{
 				continue
 			}
 
-			if err := auth.StoreAPIKey("opencode-usage", account.Name, account.APIKey); err != nil {
+			if err := auth.StoreAPIKey("token-usage", account.Name, account.APIKey); err != nil {
 				fmt.Printf("Skipping account '%s': storage error: %v\n", account.Name, err)
 				skipped++
 				continue
@@ -385,7 +385,7 @@ var accountImportCmd = &cobra.Command{
 			}
 
 			if err := config.SaveConfig(cfg, configPath); err != nil {
-				_ = auth.DeleteAPIKey("opencode-usage", account.Name)
+				_ = auth.DeleteAPIKey("token-usage", account.Name)
 				fmt.Printf("Skipping account '%s': config save error: %v\n", account.Name, err)
 				skipped++
 				continue
@@ -487,7 +487,7 @@ hot-reload auth.json).
 
 Use --clipboard to copy the API key to the system clipboard for easy
 pasting during /connect. Clear the clipboard afterwards with:
-  ou account clear-clipboard`,
+  tu account clear-clipboard`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		configPath, err := getConfigPath()
 		if err != nil {
@@ -501,7 +501,7 @@ pasting during /connect. Clear the clipboard afterwards with:
 		configureAuthFromConfig(cfg)
 
 		if len(cfg.Accounts) == 0 {
-			return fmt.Errorf("no accounts configured. Run 'opencode-usage account add' to get started")
+			return fmt.Errorf("no accounts configured. Run 'token-usage account add' to get started")
 		}
 
 		names := make([]string, 0, len(cfg.Accounts))
@@ -548,7 +548,7 @@ pasting during /connect. Clear the clipboard afterwards with:
 			targetName = names[idx-1]
 		}
 
-		apiKey, err := auth.GetAPIKey("opencode-usage", targetName)
+		apiKey, err := auth.GetAPIKey("token-usage", targetName)
 		if err != nil {
 			return fmt.Errorf("failed to retrieve API key for '%s': %w", targetName, err)
 		}
@@ -577,7 +577,7 @@ pasting during /connect. Clear the clipboard afterwards with:
 			} else {
 				fmt.Println("  API key copied to clipboard!")
 				fmt.Println("  Run /connect in opencode, then Ctrl+V to paste.")
-				fmt.Println("  WARNING: Clear your clipboard after use (e.g. run 'ou account clear-clipboard').")
+				fmt.Println("  WARNING: Clear your clipboard after use (e.g. run 'tu account clear-clipboard').")
 			}
 		} else {
 			fmt.Println("  Run /connect in opencode to apply the change.")

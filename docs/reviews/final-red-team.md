@@ -29,14 +29,14 @@
 
 **Reproduction:**
 ```
-$ ./opencode-usage quota -n "nonexistent" 2>&1
+$ ./token-usage quota -n "nonexistent" 2>&1
 Error: account 'nonexistent' not found
 Error: account 'nonexistent' not found
 ```
 
 **Root Cause:** `SilenceErrors` is NOT set on the root cobra command. Cobra's default behavior prints errors to stderr, then `main.go` prints them again via `fmt.Fprintf(os.Stderr, "Error: %v\n", err)`.
 
-**Location:** `internal/cmd/root.go:24` (missing `SilenceErrors: true`) + `cmd/opencode-usage/main.go:12`
+**Location:** `internal/cmd/root.go:24` (missing `SilenceErrors: true`) + `cmd/token-usage/main.go:12`
 
 **Impact:** Every single error case produces doubled output. Looks unprofessional. Breaks any shell script that parses stderr for error counting.
 
@@ -59,8 +59,8 @@ The `-o, --output` flag is documented as a global flag in help and README. It on
 
 **Reproduction:**
 ```
-$ ./opencode-usage version -o /tmp/test.txt
-opencode-usage 0.2.0 (commit: none, built: unknown)
+$ ./token-usage version -o /tmp/test.txt
+token-usage 0.2.0 (commit: none, built: unknown)
 $ cat /tmp/test.txt
 cat: /tmp/test.txt: No such file or directory
 ```
@@ -87,11 +87,11 @@ The `-j, --json` flag is accepted but produces identical text output for:
 Two different version formats:
 
 ```
-$ ./opencode-usage --version
-opencode-usage version 0.2.0
+$ ./token-usage --version
+token-usage version 0.2.0
 
-$ ./opencode-usage version
-opencode-usage 0.2.0 (commit: none, built: unknown)
+$ ./token-usage version
+token-usage 0.2.0 (commit: none, built: unknown)
 ```
 
 The `--version` flag uses cobra's built-in format. The `version` subcommand uses `version.GetVersionInfo()`. When built via GoReleaser with ldflags, the subcommand shows useful info (commit, date) but the flag does not.
@@ -119,8 +119,8 @@ When the encrypted secrets file exists but is empty, and `use_master_password` i
 
 **Reproduction:**
 ```
-$ touch ~/.config/opencode-usage/secrets.enc
-$ ./opencode-usage quota 2>&1
+$ touch ~/.config/token-usage/secrets.enc
+$ ./token-usage quota 2>&1
 Enter master password:
 ```
 

@@ -1,5 +1,5 @@
 <!--
-Thank you for contributing to opencode-usage!
+Thank you for contributing to token-usage!
 
 Please ensure the following before submitting:
 - Tests pass: `go test -race ./...`

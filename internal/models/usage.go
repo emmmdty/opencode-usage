@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"github.com/emmmdty/opencode-usage/internal/provider"
+	"github.com/emmmdty/token-usage/internal/provider"
 )
 
 // QuotaWindow 表示一个配额窗口

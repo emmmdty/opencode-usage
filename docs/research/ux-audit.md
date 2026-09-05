@@ -1,4 +1,4 @@
-# UX Audit: opencode-usage CLI
+# UX Audit: token-usage CLI
 
 **Auditor:** Subagent B — CLI/TUI UX Expert
 **Date:** 2026-08-26
@@ -10,7 +10,7 @@
 
 ### 1.1 Root Command Does Nothing Useful [P0]
 
-Running `opencode-usage` (no subcommand) just dumps cobra help. The #1 use case — checking quota — requires `ou q`. A first-time user who runs the tool after setup gets zero value.
+Running `token-usage` (no subcommand) just dumps cobra help. The #1 use case — checking quota — requires `tu q`. A first-time user who runs the tool after setup gets zero value.
 
 **Recommendation:** Default action should be `quota` (i.e., `RunE: quotaCmd.RunE` on root). Most CLIs do this: `docker` → `docker ps`, `gh` → shows dashboard, `kubectl` → shows help + suggested first command.
 
@@ -20,29 +20,29 @@ The alias system is internally inconsistent and confusing:
 
 | Path | Works? | Notes |
 |------|--------|-------|
-| `ou quota` | Yes | canonical |
-| `ou q` | Yes | alias on `quotaCmd` |
-| `ou account add` | Yes | canonical |
-| `ou a aa` | Yes | alias `a` on `account`, alias `aa` on `add` |
-| `ou aa` | Yes | **separate root-level command** `accountAddAliasCmd` |
-| `ou al` | Yes | **separate root-level command** `accountListAliasCmd` |
-| `ou ar` | Yes | **separate root-level command** `accountRemoveAliasCmd` |
+| `tu quota` | Yes | canonical |
+| `tu q` | Yes | alias on `quotaCmd` |
+| `tu account add` | Yes | canonical |
+| `tu a aa` | Yes | alias `a` on `account`, alias `aa` on `add` |
+| `tu aa` | Yes | **separate root-level command** `accountAddAliasCmd` |
+| `tu al` | Yes | **separate root-level command** `accountListAliasCmd` |
+| `tu ar` | Yes | **separate root-level command** `accountRemoveAliasCmd` |
 
-There are **two duplicate paths** to the same action: `ou aa` and `ou a aa`. The root-level `accountAddAliasCmd` / `accountListAliasCmd` / etc. (lines 336-376 in `account.go`) are redundant with the aliases already defined on the subcommands. This bloats `--help` output with near-duplicate entries and confuses users about which form is "correct."
+There are **two duplicate paths** to the same action: `tu aa` and `tu a aa`. The root-level `accountAddAliasCmd` / `accountListAliasCmd` / etc. (lines 336-376 in `account.go`) are redundant with the aliases already defined on the subcommands. This bloats `--help` output with near-duplicate entries and confuses users about which form is "correct."
 
-Additionally, `ou a` is the alias for `account`, but `account` itself has sub-commands that take `a` as alias too — so `ou a a` vs `ou aa` vs `ou account add` are three ways to do the same thing.
+Additionally, `tu a` is the alias for `account`, but `account` itself has sub-commands that take `a` as alias too — so `tu a a` vs `tu aa` vs `tu account add` are three ways to do the same thing.
 
 ### 1.3 Chinese-Only Help Text, English Tool Name [P1]
 
-Every `Short`, `Long`, error message, and user-facing string is in Chinese. The tool name `opencode-usage`, the README, flag names (`--json`, `--no-color`), and the binary name are all English. This is inconsistent. International users can't use the tool at all; Chinese users see English in some places and Chinese in others.
+Every `Short`, `Long`, error message, and user-facing string is in Chinese. The tool name `token-usage`, the README, flag names (`--json`, `--no-color`), and the binary name are all English. This is inconsistent. International users can't use the tool at all; Chinese users see English in some places and Chinese in others.
 
 ### 1.4 No Default Behavior Value [P0]
 
-`ou` (root command) → help text
-`ou q` → quota (the thing you always want)
-`ou cc` → current config
+`tu` (root command) → help text
+`tu q` → quota (the thing you always want)
+`tu cc` → current config
 
-The alias `cc` for `current` is non-obvious. Users will type `ou current` which works, but `cc` as a shortcut is not mnemonic.
+The alias `cc` for `current` is non-obvious. Users will type `tu current` which works, but `cc` as a shortcut is not mnemonic.
 
 ### 1.5 State Information Redundancy [P2]
 
@@ -118,9 +118,9 @@ Error rows in the quota table:
 
 ### 2.7 Empty States [P2]
 
-- `ou q` with no accounts configured: `"暂无配置的账号，请先运行 'opencode-usage account add' 添加账号"` — good, actionable.
-- `ou models` with no models: just prints `"可用模型:"` with nothing after — feels broken.
-- `ou cc` with no auth.json: `"未找到opencode配置文件"` — okay but could suggest what to do.
+- `tu q` with no accounts configured: `"暂无配置的账号，请先运行 'token-usage account add' 添加账号"` — good, actionable.
+- `tu models` with no models: just prints `"可用模型:"` with nothing after — feels broken.
+- `tu cc` with no auth.json: `"未找到opencode配置文件"` — okay but could suggest what to do.
 
 ---
 
@@ -181,7 +181,7 @@ Per the [NO_COLOR spec](https://no-color.org/), any tool respecting it must chec
 
 ### 3.4 Pipe/Redirect Outputs ANSI Escape Codes [P1]
 
-When running `ou q | less` or `ou q > output.txt`, ANSI color codes are still emitted unless `--no-color` is explicitly passed. Most modern CLI tools auto-detect `os.Stdout` is not a terminal and disable colors.
+When running `tu q | less` or `tu q > output.txt`, ANSI color codes are still emitted unless `--no-color` is explicitly passed. Most modern CLI tools auto-detect `os.Stdout` is not a terminal and disable colors.
 
 **File:** `internal/cmd/root.go` — no `isatty` check exists anywhere in the codebase.
 
@@ -230,7 +230,7 @@ For a token shorter than 6 characters (unlikely but possible), `min(6, len(token
 
 ### 4.1 No `--watch`/`--follow` Mode [P2]
 
-Monitoring quota during heavy usage requires re-running `ou q` manually. A `--watch 30s` flag would be very useful for power users.
+Monitoring quota during heavy usage requires re-running `tu q` manually. A `--watch 30s` flag would be very useful for power users.
 
 ### 4.2 `alias install` Only Supports Bash/Zsh [P2]
 
@@ -256,7 +256,7 @@ func getConfigPath() (string, error) {
     if err != nil {
         return "", err
     }
-    return homeDir + "/.config/opencode-usage/config.yaml", nil
+    return homeDir + "/.config/token-usage/config.yaml", nil
 }
 ```
 
@@ -284,7 +284,7 @@ The `-n` flag is defined as a global persistent flag, so it's available everywhe
 
 ### 4.7 No JSON Output for `account list` [P2]
 
-The `--json` flag is defined globally but `account list` doesn't honor it. `ou account list --json` just prints the formatted text.
+The `--json` flag is defined globally but `account list` doesn't honor it. `tu account list --json` just prints the formatted text.
 
 ### 4.8 `formatResetTime` Shows "0m" for Zero Duration [P2]
 
@@ -335,7 +335,7 @@ When the reset time is imminent (< 1 minute), it shows "0m". Should show somethi
 ## 6. Recommended Priority Fixes
 
 ### Immediate (P0)
-1. **Default root to `quota`** — Make `ou` show quota table directly.
+1. **Default root to `quota`** — Make `tu` show quota table directly.
 2. **Fix CJK width** — Add `runewidth.StringWidth()` for all column width and padding calculations.
 
 ### Short-term (P1)
@@ -343,7 +343,7 @@ When the reset time is imminent (< 1 minute), it shows "0m". Should show somethi
 4. **Add spinner during concurrent fetch** — At minimum, print "Fetching..." before the goroutines.
 5. **Add progress bars to quota table** — Replace or supplement percentages with `████░░░░` visual bars.
 6. **Color error rows** — Make errors visually distinct (red + prefix).
-7. **Remove duplicate root-level alias commands** — `ou aa` etc. are redundant with `ou a aa`.
+7. **Remove duplicate root-level alias commands** — `tu aa` etc. are redundant with `tu a aa`.
 8. **Fix `account list` CJK alignment** — Use `runewidth` for status and name columns.
 
 ### Medium-term (P2)

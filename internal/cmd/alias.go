@@ -31,8 +31,8 @@ var aliasInstallCmd = &cobra.Command{
 			rcFile = homeDir + "/.bashrc"
 		}
 
-		if aliasExists(rcFile, "ou") {
-			fmt.Printf("Alias 'ou' already exists in %s\n", rcFile)
+		if aliasExists(rcFile, "tu") {
+			fmt.Printf("Alias 'tu' already exists in %s\n", rcFile)
 			fmt.Print("Overwrite? (y/N): ")
 
 			reader := bufio.NewReader(os.Stdin)
@@ -45,7 +45,7 @@ var aliasInstallCmd = &cobra.Command{
 			}
 		}
 
-		alias := "\n# opencode-usage alias\nalias ou='opencode-usage'\n"
+		alias := "\n# token-usage alias\nalias tu='token-usage'\n"
 
 		f, err := os.OpenFile(rcFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 		if err != nil {
@@ -81,16 +81,16 @@ var aliasUninstallCmd = &cobra.Command{
 			rcFile = homeDir + "/.bashrc"
 		}
 
-		if !aliasExists(rcFile, "ou") {
-			fmt.Printf("Alias 'ou' not found in %s\n", rcFile)
+		if !aliasExists(rcFile, "tu") {
+			fmt.Printf("Alias 'tu' not found in %s\n", rcFile)
 			return nil
 		}
 
-		if err := removeAlias(rcFile, "ou"); err != nil {
+		if err := removeAlias(rcFile, "tu"); err != nil {
 			return err
 		}
 
-		fmt.Printf("Alias 'ou' removed from %s\n", rcFile)
+		fmt.Printf("Alias 'tu' removed from %s\n", rcFile)
 		fmt.Println("Run 'source " + rcFile + "' or restart your terminal")
 		return nil
 	},
@@ -142,7 +142,7 @@ func removeAlias(rcFile, alias string) error {
 	var result []string
 	for i, line := range lines {
 		if strings.Contains(line, aliasLine) {
-			if i > 0 && len(result) > 0 && strings.TrimSpace(result[len(result)-1]) == "# opencode-usage alias" {
+			if i > 0 && len(result) > 0 && strings.TrimSpace(result[len(result)-1]) == "# token-usage alias" {
 				result = result[:len(result)-1]
 			}
 			continue

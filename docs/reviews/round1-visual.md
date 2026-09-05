@@ -18,7 +18,7 @@ The TUI rendering in `internal/tui/quota.go` produces clean, well-structured out
 
 - **Severity**: MAJOR
 - **Terminal Width**: 60, 70 cols (also affects long account names at 80)
-- **Command/Scenario**: `opencode-usage quota` with 3+ accounts on a 60-col terminal
+- **Command/Scenario**: `token-usage quota` with 3+ accounts on a 60-col terminal
 - **Actual Output** (width=60, 3 accounts):
   ```
     ACCOUNT         5H               Weekly           Monthly        
@@ -45,7 +45,7 @@ The TUI rendering in `internal/tui/quota.go` produces clean, well-structured out
 
 - **Severity**: MAJOR
 - **Terminal Width**: All widths (80 confirmed)
-- **Command/Scenario**: `opencode-usage quota` with `--account` or default current account
+- **Command/Scenario**: `token-usage quota` with `--account` or default current account
 - **Actual Output** (width=80, multi):
   ```
   → work            ██░░░░  35% 7h59m   ░░░░░░  12% 4d23h   ░░░░░░   8% 22d23h

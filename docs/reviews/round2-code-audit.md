@@ -182,12 +182,12 @@ if strings.Contains(line, "alias "+alias+"=") {
 }
 ```
 
-This matches any line containing `alias ou=` as a substring. A line like `# alias out='something'` would also match since it contains `alias ou`. This could lead to false positives.
+This matches any line containing `alias tu=` as a substring. A line like `# alias out='something'` would also match since it contains `alias tu`. This could lead to false positives.
 
 **Severity**: MINOR — edge case false positive
 **Verdict**: REQUEST CHANGES
 
-**Recommendation**: Use a more precise match, e.g., check that the line starts with `alias ou=` or `alias ou='` or `alias ou="`.
+**Recommendation**: Use a more precise match, e.g., check that the line starts with `alias tu=` or `alias tu='` or `alias tu="`.
 
 ---
 

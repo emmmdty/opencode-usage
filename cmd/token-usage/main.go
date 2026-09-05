@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/emmmdty/opencode-usage/internal/cmd"
+	"github.com/emmmdty/token-usage/internal/cmd"
 )
 
 func main() {

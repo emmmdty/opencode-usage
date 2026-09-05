@@ -20,7 +20,7 @@ type ValidationResponse struct {
 
 func ValidateAPIKey(apiKey, baseURL string) (*ValidationResponse, error) {
 	if baseURL == "" {
-		baseURL = os.Getenv("OPENCODE_USAGE_BASE_URL")
+		baseURL = os.Getenv("TOKEN_USAGE_BASE_URL")
 		if baseURL == "" {
 			baseURL = defaultBaseURL
 		}

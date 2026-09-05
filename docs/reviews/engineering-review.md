@@ -74,17 +74,17 @@
 
 | # | Severity | File | Finding |
 |---|----------|------|---------|
-| 9.1 | **MINOR** | `internal/cmd/root.go:27-28` | The root command now has `Aliases: []string{"ou"}` and the root `RunE` calls `runQuotaOverview` directly. Previously (pre-change), `opencode-usage` with no subcommand likely showed help. Now it shows quota output. This is a **behavioral breaking change** for users who run bare `opencode-usage`. |
+| 9.1 | **MINOR** | `internal/cmd/root.go:27-28` | The root command now has `Aliases: []string{"tu"}` and the root `RunE` calls `runQuotaOverview` directly. Previously (pre-change), `token-usage` with no subcommand likely showed help. Now it shows quota output. This is a **behavioral breaking change** for users who run bare `token-usage`. |
 | 9.2 | **NIT** | JSON output format: The JSON schema fields use `"quota"` (from `accountResult`) not `"usage"`. Any prior consumers expecting different field names will break. Since this appears to be the first release, this may be acceptable. |
 
 ## 10. Security Surface
 
 | # | Severity | File | Finding |
 |---|----------|------|---------|
-| 10.1 | **MAJOR** | `internal/auth/encrypted.go:27` | `defaultPassword = "opencode-usage-default"` is a hardcoded encryption fallback password used when master password is not enabled. This means anyone who can read the encrypted file (`secrets.enc`) can decrypt it with this static password. The encrypted file is better than plaintext, but this provides minimal security against an attacker with file access. |
+| 10.1 | **MAJOR** | `internal/auth/encrypted.go:27` | `defaultPassword = "token-usage-default"` is a hardcoded encryption fallback password used when master password is not enabled. This means anyone who can read the encrypted file (`secrets.enc`) can decrypt it with this static password. The encrypted file is better than plaintext, but this provides minimal security against an attacker with file access. |
 | 10.2 | **MAJOR** | `internal/cmd/account.go:48` | After `term.ReadPassword`, the raw API key is stored as a Go string (`apiKey := strings.TrimSpace(string(apiKeyBytes))`). The original `apiKeyBytes` slice from `term.ReadPassword` is not zeroed. While Go's GC will eventually reclaim the memory, the key remains in the process heap indefinitely. |
 | 10.3 | **MINOR** | `internal/auth/credential.go:42` | The keyring test writes `"test"` as a plaintext value during `init()`. If the keyring backend has any logging or persistence side effects, this could leak. Minor risk. |
-| 10.4 | **NIT** | `internal/cmd/alias.go:48-50` | The alias command appends `alias ou='opencode-usage'` to RC files. If the binary path is not in `$PATH`, this alias will fail silently. More importantly, if an attacker can modify the RC file before the user runs `alias install`, they could inject arbitrary commands. This is a standard risk for RC file modification tools. |
+| 10.4 | **NIT** | `internal/cmd/alias.go:48-50` | The alias command appends `alias tu='token-usage'` to RC files. If the binary path is not in `$PATH`, this alias will fail silently. More importantly, if an attacker can modify the RC file before the user runs `alias install`, they could inject arbitrary commands. This is a standard risk for RC file modification tools. |
 
 ---
 

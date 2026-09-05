@@ -7,9 +7,9 @@
 
 ## Executive Summary
 
-The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5 distinct product categories. The current project (opencode-usage) occupies the **CLI-only quota viewer** niche. The most successful projects (slkiser/opencode-quota with 916 stars, PhilippPolterauer/opencode-quotas with 60 stars) are **OpenCode plugins** that display quota inside the TUI. The most architecturally sophisticated projects (Rishabh-Bajpai/opencode-go-multi-auth, x0c/subswap) are **multi-account routers/proxies**.
+The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5 distinct product categories. The current project (token-usage) occupies the **CLI-only quota viewer** niche. The most successful projects (slkiser/opencode-quota with 916 stars, PhilippPolterauer/opencode-quotas with 60 stars) are **OpenCode plugins** that display quota inside the TUI. The most architecturally sophisticated projects (Rishabh-Bajpai/opencode-go-multi-auth, x0c/subswap) are **multi-account routers/proxies**.
 
-**Key finding:** No project successfully combines "lightweight Go CLI" with "multi-account quota awareness." This is opencode-usage's differentiation opportunity.
+**Key finding:** No project successfully combines "lightweight Go CLI" with "multi-account quota awareness." This is token-usage's differentiation opportunity.
 
 ---
 
@@ -20,9 +20,9 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 | **Quota Viewer (Plugin)** | slkiser/opencode-quota, PhilippPolterauer/opencode-quotas, whosydd/opencode-quota, itzmegas/opencode-quota, yehezkielgunawan/opencode-quota-tracker | Display quota in OpenCode TUI/sidebar | 916, 60, ~5, ~5, ~2 |
 | **Multi-Account Router (Proxy)** | Rishabh-Bajpai/opencode-go-multi-auth, David-Nahorniak/opencode-go-multi-auth, dhaalves/opencode-swap, xnqycs/OpenCodeGo_Pool | Proxy routing across multiple API keys | 8, 0, 7, 38 |
 | **Multi-Account Switcher (CLI)** | masrurimz/opencode-go-multi-auth, x0c/subswap | CLI-based account switching/rotation | 12, 2 |
-| **Usage Analytics (CLI+Web)** | gaboe/opencode-usage | Token usage tracking from SQLite DB | 20 |
+| **Usage Analytics (CLI+Web)** | gaboe/token-usage | Token usage tracking from SQLite DB | 20 |
 | **Quota Dashboard (TUI)** | ZeroClue/llm-quota-tracker, opgginc/opencode-bar | Multi-provider terminal/menu bar dashboard | ~5, ~10 |
-| **opencode-usage (current)** | emmmdty/opencode-usage | Go CLI for multi-account quota queries | — |
+| **token-usage (current)** | emmmdty/token-usage | Go CLI for multi-account quota queries | — |
 
 ---
 
@@ -42,7 +42,7 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 | **Weaknesses** | Requires OpenCode running (can't check quota standalone). Node.js dependency. No multi-account rotation — just visibility |
 | **What NOT to copy** | Provider sprawl — 20+ providers means high maintenance burden and complexity |
 
-**Takeaway for opencode-usage:** The "zero context window pollution" pattern is excellent — injecting ignored inline messages rather than consuming model context. Consider if opencode-usage ever integrates with OpenCode TUI.
+**Takeaway for token-usage:** The "zero context window pollution" pattern is excellent — injecting ignored inline messages rather than consuming model context. Consider if token-usage ever integrates with OpenCode TUI.
 
 ---
 
@@ -58,7 +58,7 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 | **Strengths** | Prediction (ETTL) is unique and genuinely useful. Aggregation strategies (most_critical, max, min, mean, median) are sophisticated |
 | **Weaknesses** | Limited provider support (3 providers). Plugin-only — no standalone CLI |
 
-**Takeaway for opencode-usage:** The ETTL prediction pattern (linear regression on usage history) is a strong differentiator. opencode-usage could add this without complexity — just track quota snapshots over time in SQLite.
+**Takeaway for token-usage:** The ETTL prediction pattern (linear regression on usage history) is a strong differentiator. token-usage could add this without complexity — just track quota snapshots over time in SQLite.
 
 ---
 
@@ -76,7 +76,7 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 | **Strengths** | Rust = single binary, zero runtime deps. Provider architecture is clean. Manual swap works offline |
 | **Weaknesses** | 2 stars = low adoption. Daemon adds complexity. No TUI/dashboard — pure CLI |
 
-**Takeaway for opencode-usage:** The "manual swap never depends on quota lookups" invariant is critical for reliability. The provider crate architecture is overkill for opencode-usage's scope but the design principle of "escape hatch that always works" is worth adopting.
+**Takeaway for token-usage:** The "manual swap never depends on quota lookups" invariant is critical for reliability. The provider crate architecture is overkill for token-usage's scope but the design principle of "escape hatch that always works" is worth adopting.
 
 ---
 
@@ -93,7 +93,7 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 | **Strengths** | Professional-grade dashboard. Dual upstream (Go + Zen). Cache-preserving header passthrough |
 | **Weaknesses** | Requires Node.js 22+. Two processes (plugin + proxy). Plugin auto-start means implicit background daemon. Educational-purpose-only disclaimer |
 
-**Takeaway for opencode-usage:** The "React, don't predict" philosophy is excellent — opencode-usage should never estimate quota, only report actual API responses. The per-model rate card for cost estimation (with `~` prefix and tooltip) is a smart UX pattern.
+**Takeaway for token-usage:** The "React, don't predict" philosophy is excellent — token-usage should never estimate quota, only report actual API responses. The per-model rate card for cost estimation (with `~` prefix and tooltip) is a smart UX pattern.
 
 ---
 
@@ -105,10 +105,10 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 |-----------|------------|
 | **Key Additions** | Docker containerization, Apprise (100+ notification services), proxy access token (timing-safe compare), Go plan usage API (`GET /zen/go/v1/usage`) |
 | **Go Plan Usage** | Calls upstream usage API with account's own Go API key. Returns rolling/weekly/monthly usage (percent + ISO reset timestamps). Detects invalid/revoked key and unactivated plan |
-| **Strengths** | Go plan usage endpoint is the same API opencode-usage uses. Docker support enables headless deployment |
+| **Strengths** | Go plan usage endpoint is the same API token-usage uses. Docker support enables headless deployment |
 | **Weaknesses** | Mirror repository with 0 stars. Feature additions complicate the original |
 
-**Takeaway for opencode-usage:** The Go plan usage API module (`opencode-go-usage.ts`) is a clean reference implementation. The API returns `keyInvalid`, `planNotActivated` states — opencode-usage should handle these same edge cases.
+**Takeaway for token-usage:** The Go plan usage API module (`opencode-go-usage.ts`) is a clean reference implementation. The API returns `keyInvalid`, `planNotActivated` states — token-usage should handle these same edge cases.
 
 ---
 
@@ -124,7 +124,7 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 | **Strengths** | Truly zero dependencies. Transparent proxy (model names pass through). Monitoring endpoints (`/oswap/health`, `/oswap/status`). Test suite with fake upstream |
 | **Weaknesses** | Requires separate process (`oswap serve`). No web dashboard. Single machine only |
 
-**Takeaway for opencode-usage:** The "retries only before first response byte" pattern is critical for SSE streaming correctness. The `oswap import` command that auto-discovers keys from OpenCode's auth.json is a great UX pattern — opencode-usage should offer similar auto-discovery.
+**Takeaway for token-usage:** The "retries only before first response byte" pattern is critical for SSE streaming correctness. The `oswap import` command that auto-discovers keys from OpenCode's auth.json is a great UX pattern — token-usage should offer similar auto-discovery.
 
 ---
 
@@ -140,11 +140,11 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 | **Strengths** | No daemon needed. Plugin-native. Simple architecture. 23 tests |
 | **Weaknesses** | Per-process stickiness = must restart OpenCode to rotate. No web dashboard |
 
-**Takeaway for opencode-usage:** The atomic JSON write pattern (tmp + rename + backup) is a good data safety practice. The `opencode plugin` global install command is the cleanest installation UX in the ecosystem.
+**Takeaway for token-usage:** The atomic JSON write pattern (tmp + rename + backup) is a good data safety practice. The `opencode plugin` global install command is the cleanest installation UX in the ecosystem.
 
 ---
 
-### 8. gaboe/opencode-usage ⭐ 20
+### 8. gaboe/token-usage ⭐ 20
 
 **Product Positioning:** CLI tool for tracking OpenCode usage/costs from SQLite DB, with Commander web dashboard.
 
@@ -156,7 +156,7 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 | **Strengths** | SQLite-based = no API calls needed for historical usage. Web dashboard is comprehensive |
 | **Weaknesses** | Different purpose (historical usage analytics vs. live quota). No Go plan quota API integration |
 
-**Takeaway for opencode-usage:** The SQLite-based historical usage tracking is complementary to opencode-usage's live quota queries. Consider whether opencode-usage should also read `opencode.db` for usage history.
+**Takeaway for token-usage:** The SQLite-based historical usage tracking is complementary to token-usage's live quota queries. Consider whether token-usage should also read `opencode.db` for usage history.
 
 ---
 
@@ -172,7 +172,7 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 | **Strengths** | Auto-discovery is magical. Daily allowance is a genuinely useful metric. Multi-provider |
 | **Weaknesses** | Python runtime dependency. Limited provider support |
 
-**Takeaway for opencode-usage:** The "daily allowance" metric (remaining quota / days until reset) is simple but powerful. opencode-usage could compute this for each window. Auto-discovery of credentials from OpenCode's auth.json is also worth adopting.
+**Takeaway for token-usage:** The "daily allowance" metric (remaining quota / days until reset) is simple but powerful. token-usage could compute this for each window. Auto-discovery of credentials from OpenCode's auth.json is also worth adopting.
 
 ---
 
@@ -188,7 +188,7 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 | **Strengths** | Native macOS = zero resource overhead. EOM prediction is sophisticated. Multi-source auth detection |
 | **Weaknesses** | macOS only. Not cross-platform |
 
-**Takeaway for opencode-usage:** The EOM (End Of Month) prediction using weighted averages is a strong pattern. The "auth source labels" showing where each credential was detected is excellent transparency UX.
+**Takeaway for token-usage:** The EOM (End Of Month) prediction using weighted averages is a strong pattern. The "auth source labels" showing where each credential was detected is excellent transparency UX.
 
 ---
 
@@ -202,7 +202,7 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 | **Sidebar panels** | slkiser/opencode-quota, itzmegas/opencode-quota | Persistent visibility without clutter |
 | **Progress bars with color** | All quota viewers | Instant visual scan of status |
 | **Reset countdown timers** | All projects | Actionable — tells you when relief comes |
-| **JSON output for scripts** | opencode-usage, gaboe/opencode-usage, slkiser/opencode-quota | Composability with other tools |
+| **JSON output for scripts** | token-usage, gaboe/token-usage, slkiser/opencode-quota | Composability with other tools |
 | **Auto-discovery of credentials** | dhaalves/opencode-swap, ZeroClue/llm-quota-tracker, opgginc/opencode-bar | Zero-config first run |
 | **"React, don't predict"** | Rishabh-Bajpai/opencode-go-multi-auth | Never show wrong quota data |
 | **Escape hatch that always works** | x0c/subswap | Manual swap never depends on quota API |
@@ -211,40 +211,40 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 
 ---
 
-## Which Designs Fit opencode-usage?
+## Which Designs Fit token-usage?
 
 ### ✅ Strong Fit (Adopt)
 
 | Pattern | Source | Rationale |
 |---------|--------|-----------|
-| **Auto-discovery from auth.json** | dhaalves/opencode-swap, ZeroClue/llm-quota-tracker | opencode-usage should detect existing keys automatically |
+| **Auto-discovery from auth.json** | dhaalves/opencode-swap, ZeroClue/llm-quota-tracker | token-usage should detect existing keys automatically |
 | **Daily allowance metric** | ZeroClue/llm-quota-tracker | Simple, actionable: "You can use X per day for the rest of the window" |
 | **"React, don't predict"** | Rishabh-Bajpai/opencode-go-multi-auth | Report actual API responses, never estimate |
 | **Per-model rate card with `~` prefix** | Rishabh-Bajpai/opencode-go-multi-auth | Cost estimation with clear "estimated" indicator |
 | **Atomic JSON writes (tmp + rename)** | masrurimz/opencode-go-multi-auth | Data safety for config file |
 | **`oswap import` pattern** | dhaalves/opencode-swap | Pull keys from OpenCode's auth.json + account.json |
-| **Exit code table** | opencode-usage (current) | Already implemented, keep it |
-| **Keyring + encrypted fallback** | opencode-usage (current) | Already implemented, keep it |
+| **Exit code table** | token-usage (current) | Already implemented, keep it |
+| **Keyring + encrypted fallback** | token-usage (current) | Already implemented, keep it |
 
 ### ⚠️ Partial Fit (Consider Carefully)
 
 | Pattern | Source | Consideration |
 |---------|--------|---------------|
-| **SQLite usage history** | gaboe/opencode-usage, ZeroClue/llm-quota-tracker | Complementary data, but adds complexity. Consider as optional feature |
+| **SQLite usage history** | gaboe/token-usage, ZeroClue/llm-quota-tracker | Complementary data, but adds complexity. Consider as optional feature |
 | **ETTL prediction** | PhilippPolterauer/opencode-quotas | Useful but requires historical data. Could add in v0.3 |
-| **Watch mode** | gaboe/opencode-usage | Useful for monitoring, but opencode-usage's strength is "run, check, done" |
+| **Watch mode** | gaboe/token-usage | Useful for monitoring, but token-usage's strength is "run, check, done" |
 | **JSON output** | All CLI tools | Already implemented, keep it |
 
 ### ❌ Poor Fit (Do NOT Copy)
 
 | Pattern | Source | Why It Breaks |
 |---------|--------|---------------|
-| **OpenCode plugin architecture** | slkiser/opencode-quota, all plugins | opencode-usage is a standalone CLI, not a plugin. Adding plugin API ties it to OpenCode's internals |
-| **Web dashboard (React/Vite)** | Rishabh-Bajpai/opencode-go-multi-auth, gaboe/opencode-usage | Breaks "lightweight CLI" positioning. Requires Node.js |
-| **Proxy daemon** | dhaalves/opencode-swap, Rishabh-Bajpai/opencode-go-multi-auth | Requires background process. opencode-usage should be fire-and-forget |
-| **Multi-provider support (20+)** | slkiser/opencode-quota | opencode-usage is scoped to OpenCode Go only. Don't scope-creep |
+| **OpenCode plugin architecture** | slkiser/opencode-quota, all plugins | token-usage is a standalone CLI, not a plugin. Adding plugin API ties it to OpenCode's internals |
+| **Web dashboard (React/Vite)** | Rishabh-Bajpai/opencode-go-multi-auth, gaboe/token-usage | Breaks "lightweight CLI" positioning. Requires Node.js |
+| **Proxy daemon** | dhaalves/opencode-swap, Rishabh-Bajpai/opencode-go-multi-auth | Requires background process. token-usage should be fire-and-forget |
+| **Multi-provider support (20+)** | slkiser/opencode-quota | token-usage is scoped to OpenCode Go only. Don't scope-creep |
 | **Rust rewrite** | x0c/subswap | Go is the right choice for this project's scope. Single binary without Rust toolchain |
-| **Docker containerization** | David-Nahorniak/opencode-go-multi-auth | opencode-usage is a local CLI tool, not a service |
+| **Docker containerization** | David-Nahorniak/opencode-go-multi-auth | token-usage is a local CLI tool, not a service |
 | **Background daemon** | x0c/subswap, Rishabh-Bajpai/opencode-go-multi-auth | Breaks the "run and forget" mental model |
 
 ---
@@ -263,7 +263,7 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 - **Quota result cache with stale fallback** — always show something, refresh in background
 
 ### From dhaalves/opencode-swap
-- **Zero dependencies** — pure Node.js runtime. opencode-usage's Go approach already achieves this
+- **Zero dependencies** — pure Node.js runtime. token-usage's Go approach already achieves this
 - **Monitoring endpoints** — `/health` and `/status` for observability
 - **Test suite with fake upstream** — no network required for tests
 
@@ -277,15 +277,15 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 
 | Need | Current Solutions | Gap |
 |------|------------------|-----|
-| **Standalone quota CLI (no OpenCode dependency)** | opencode-usage (Go), dhaalves/opencode-swap (Node) | Only 2 projects. opencode-usage is the only Go option |
-| **Multi-account quota viewer (not router)** | opencode-usage (Go), slkiser/opencode-quota (TS plugin) | opencode-usage is unique as standalone CLI |
-| **Go binary, zero runtime deps** | opencode-usage only | Clear differentiation |
-| **OpenCode Go-specific (not multi-provider)** | opencode-usage only | All other projects try to support everything |
-| **Quota + cost estimation in CLI** | opencode-usage, gaboe/opencode-usage | Only 2 projects combine both |
+| **Standalone quota CLI (no OpenCode dependency)** | token-usage (Go), dhaalves/opencode-swap (Node) | Only 2 projects. token-usage is the only Go option |
+| **Multi-account quota viewer (not router)** | token-usage (Go), slkiser/opencode-quota (TS plugin) | token-usage is unique as standalone CLI |
+| **Go binary, zero runtime deps** | token-usage only | Clear differentiation |
+| **OpenCode Go-specific (not multi-provider)** | token-usage only | All other projects try to support everything |
+| **Quota + cost estimation in CLI** | token-usage, gaboe/token-usage | Only 2 projects combine both |
 
 ---
 
-## Recommendations for opencode-usage
+## Recommendations for token-usage
 
 ### Positioning
 **"The lightweight Go CLI for OpenCode Go quota and cost tracking across multiple accounts."**
@@ -293,13 +293,13 @@ The OpenCode Go usage/quota ecosystem has **significant fragmentation** across 5
 Not a plugin. Not a router. Not a daemon. A CLI you run, check, and close.
 
 ### Short-term (v0.2)
-1. **Auto-discover keys from auth.json** — `opencode-usage account import --auto`
+1. **Auto-discover keys from auth.json** — `token-usage account import --auto`
 2. **Daily allowance metric** — "35% used, 12% left, resets in 5d6h → safe to use 2.4%/day"
 3. **Per-model cost estimation** with `~` prefix for estimates
 
 ### Medium-term (v0.3)
 1. **SQLite usage history** — track quota snapshots for ETTL prediction
-2. **Watch mode** — `opencode-usage quota --watch` with auto-refresh
+2. **Watch mode** — `token-usage quota --watch` with auto-refresh
 3. **Shell completion** (bash/zsh/fish)
 
 ### Do NOT add
@@ -317,7 +317,7 @@ Not a plugin. Not a router. Not a daemon. A CLI you run, check, and close.
 |---------|-------|-------|----------|-------------|
 | slkiser/opencode-quota | 916 | 95 | TypeScript | Active (724 commits) |
 | PhilippPolterauer/opencode-quotas | 60 | 9 | TypeScript | Active |
-| gaboe/opencode-usage | 20 | 5 | TypeScript | Active |
+| gaboe/token-usage | 20 | 5 | TypeScript | Active |
 | masrurimz/opencode-go-multi-auth | 12 | 3 | TypeScript | Active |
 | Rishabh-Bajpai/opencode-go-multi-auth | 8 | 3 | TypeScript | Active |
 | dhaalves/opencode-swap | 7 | 0 | TypeScript | Recent |
@@ -325,6 +325,6 @@ Not a plugin. Not a router. Not a daemon. A CLI you run, check, and close.
 | x0c/subswap | 2 | 1 | Rust | Active |
 | David-Nahorniak/opencode-go-multi-auth | 0 | 0 | TypeScript | Mirror |
 
-**Language breakdown:** TypeScript dominates (8 projects). Go is rare (2: OpenCodeGo_Pool, opencode-usage). Rust has 1 project (subswap).
+**Language breakdown:** TypeScript dominates (8 projects). Go is rare (2: OpenCodeGo_Pool, token-usage). Rust has 1 project (subswap).
 
-**opencode-usage's Go advantage:** The ecosystem is TypeScript-heavy. A well-crafted Go CLI stands out as the "just works" option with zero runtime dependencies.
+**token-usage's Go advantage:** The ecosystem is TypeScript-heavy. A well-crafted Go CLI stands out as the "just works" option with zero runtime dependencies.

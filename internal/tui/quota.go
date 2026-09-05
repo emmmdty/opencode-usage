@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/emmmdty/opencode-usage/internal/models"
+	"github.com/emmmdty/token-usage/internal/models"
 	"github.com/mattn/go-runewidth"
 )
 
@@ -34,7 +34,7 @@ func FormatQuotaOverview(results []AccountResult, style QuotaStyle, currentAccou
 	width := GetTerminalWidth()
 
 	if len(results) == 0 {
-		return theme.Muted.Render("  No accounts configured. Run 'opencode-usage account add' to get started.\n")
+		return theme.Muted.Render("  No accounts configured. Run 'token-usage account add' to get started.\n")
 	}
 
 	for i := range results {
@@ -76,7 +76,7 @@ func formatTable(results []AccountResult, style QuotaStyle, theme Theme, width i
 		barWidth = 0
 	}
 
-	b.WriteString(theme.Title.Render("  OpenCode Go  ") + theme.Muted.Render(fmt.Sprintf("refreshed %s", time.Now().Format("15:04:05"))) + "\n\n")
+	b.WriteString(theme.Title.Render("  Token Usage  ") + theme.Muted.Render(fmt.Sprintf("refreshed %s", time.Now().Format("15:04:05"))) + "\n\n")
 
 	// 表头与内容对齐
 	header := "  " +
@@ -134,7 +134,7 @@ func formatTable(results []AccountResult, style QuotaStyle, theme Theme, width i
 
 func formatCompact(results []AccountResult, style QuotaStyle, theme Theme) string {
 	var b strings.Builder
-	b.WriteString("  OpenCode Go\n\n")
+	b.WriteString("  Token Usage\n\n")
 
 	for _, result := range results {
 		if result.Error != "" {

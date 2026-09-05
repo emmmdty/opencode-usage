@@ -53,7 +53,7 @@ jobs:
 
       - name: Test
         env:
-          OPENCODE_USAGE_MASTER_PASSWORD: ci-test-master-password
+          TOKEN_USAGE_MASTER_PASSWORD: ci-test-master-password
         run: go test -v -race -count=1 ./...
 
   build:

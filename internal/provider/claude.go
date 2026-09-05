@@ -18,7 +18,7 @@ type ClaudeProvider struct {
 	endpoint  string
 	cache     *claudeCache
 	mu        sync.RWMutex
-	// cachePath 用于测试隔离；为空时使用默认路径 ~/.config/opencode-usage/claude_cache.json
+	// cachePath 用于测试隔离；为空时使用默认路径 ~/.config/token-usage/claude_cache.json
 	cachePath string
 }
 
@@ -123,9 +123,9 @@ func (p *ClaudeProvider) GetUsage() (*Usage, error) {
 
 	respBody, _ := io.ReadAll(resp.Body)
 
-	// 调试日志：当 OPENCODE_USAGE_DEBUG=1 时保存原始响应（含状态码、响应头、响应体）
+	// 调试日志：当 TOKEN_USAGE_DEBUG=1 时保存原始响应（含状态码、响应头、响应体）
 	// 便于排查 API 返回结构变化（不会发起额外请求，仅落盘本次已有的响应）
-	if os.Getenv("OPENCODE_USAGE_DEBUG") != "" {
+	if os.Getenv("TOKEN_USAGE_DEBUG") != "" {
 		p.dumpRawResponse(resp, respBody)
 	}
 
@@ -245,7 +245,7 @@ func parseClaudeHeaderWindow(header http.Header, window string) *QuotaWindow {
 }
 
 // dumpRawResponse 把原始响应（状态码 + 响应头 + 响应体）落盘到调试日志文件，
-// 仅在 OPENCODE_USAGE_DEBUG 环境变量非空时启用。文件每次请求会被覆盖。
+// 仅在 TOKEN_USAGE_DEBUG 环境变量非空时启用。文件每次请求会被覆盖。
 func (p *ClaudeProvider) dumpRawResponse(resp *http.Response, body []byte) {
 	logPath := p.getDebugLogPath()
 	var b strings.Builder
@@ -265,7 +265,7 @@ func (p *ClaudeProvider) dumpRawResponse(resp *http.Response, body []byte) {
 
 func (p *ClaudeProvider) getDebugLogPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "opencode-usage", "claude_debug.log")
+	return filepath.Join(home, ".config", "token-usage", "claude_debug.log")
 }
 
 func (p *ClaudeProvider) getCachePath() string {
@@ -273,7 +273,7 @@ func (p *ClaudeProvider) getCachePath() string {
 		return p.cachePath
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "opencode-usage", "claude_cache.json")
+	return filepath.Join(home, ".config", "token-usage", "claude_cache.json")
 }
 
 func (p *ClaudeProvider) loadCachedUsage() *Usage {

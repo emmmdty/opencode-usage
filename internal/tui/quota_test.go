@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/emmmdty/opencode-usage/internal/models"
+	"github.com/emmmdty/token-usage/internal/models"
 )
 
 func TestFormatQuotaOverviewEmpty(t *testing.T) {
@@ -36,8 +36,8 @@ func TestFormatQuotaOverviewSingleAccount(t *testing.T) {
 	if !strings.Contains(output, "35%") {
 		t.Errorf("expected '35%%' in output, got: %s", output)
 	}
-	if !strings.Contains(output, "OpenCode Go") {
-		t.Errorf("expected 'OpenCode Go' header, got: %s", output)
+	if !strings.Contains(output, "Token Usage") {
+		t.Errorf("expected 'Token Usage' header, got: %s", output)
 	}
 }
 

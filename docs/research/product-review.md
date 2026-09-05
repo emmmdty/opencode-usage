@@ -2,13 +2,13 @@
 
 **Reviewer:** Subagent C (Product/Engineering Architecture)
 **Date:** 2026-08-26
-**Scope:** Feature prioritization for opencode-usage v0.2.0+
+**Scope:** Feature prioritization for token-usage v0.2.0+
 
 ---
 
 ## Current State Summary
 
-The project is a Go CLI tool (`opencode-usage`) that manages OpenCode Go plan accounts and queries quota usage. It uses cobra for CLI, lipgloss for terminal styling, keyring for credential storage, and has a basic TUI table renderer.
+The project is a Go CLI tool (`token-usage`) that manages OpenCode Go plan accounts and queries quota usage. It uses cobra for CLI, lipgloss for terminal styling, keyring for credential storage, and has a basic TUI table renderer.
 
 **Existing commands:** `quota`, `models`, `account` (add/list/remove/export/import), `current`, `alias` (install/uninstall), `version`, `update`
 
@@ -28,11 +28,11 @@ The project is a Go CLI tool (`opencode-usage`) that manages OpenCode Go plan ac
 
 ## Feature Evaluation
 
-### 1. Default `ou` command showing a dashboard overview
+### 1. Default `tu` command showing a dashboard overview
 
 **Category: DO NOW**
 
-**User value:** Currently `ou` with no subcommand shows help. Users expect a bare command to show a useful overview — the "what do I have" summary. This is the single most impactful UX improvement possible. Every CLI tool benefits from a sensible default action.
+**User value:** Currently `tu` with no subcommand shows help. Users expect a bare command to show a useful overview — the "what do I have" summary. This is the single most impactful UX improvement possible. Every CLI tool benefits from a sensible default action.
 
 **Implementation complexity:** Low. The `quota` command already does all the heavy lifting. The root command's `Run` field just needs to be set to a function that calls the same multi-account quota logic. No new packages needed.
 
@@ -40,7 +40,7 @@ The project is a Go CLI tool (`opencode-usage`) that manages OpenCode Go plan ac
 - `internal/cmd/root.go`: Add `Run` (or `RunE`) to `rootCmd` that executes the quota query logic
 - Refactor the quota query logic out of `quotaCmd.RunE` into a shared function (e.g., `runQuotaOverview(accountFilter string, jsonOut bool, outPath string)`) in `internal/cmd/quota.go`
 - `rootCmd.Run` calls `runQuotaOverview("", false, "")`
-- The bare `ou` shows quota for all accounts, or a summary with best-account recommendation if #6 is also built
+- The bare `tu` shows quota for all accounts, or a summary with best-account recommendation if #6 is also built
 
 ---
 
@@ -83,7 +83,7 @@ The project is a Go CLI tool (`opencode-usage`) that manages OpenCode Go plan ac
 **Implementation complexity:** Low. The rendering already uses these thresholds. Need a CLI command or flag to set them.
 
 **Changes needed:**
-- `internal/cmd/root.go` or new `config.go` subcommand: `ou config set-threshold warning 70` / `ou config set-threshold danger 90`
+- `internal/cmd/root.go` or new `config.go` subcommand: `tu config set-threshold warning 70` / `tu config set-threshold danger 90`
 - Or a `--warning` / `--danger` flag on the quota command
 
 ---
@@ -115,7 +115,7 @@ Already in `quota.go:55-93`. The semaphore is `maxConcurrent` (default 5). No wo
 
 **Category: NEXT**
 
-**User value:** Avoids hitting the API on every `ou` invocation. Quota data changes slowly — caching for 30-60 seconds with stale-while-revalidate pattern would make the tool feel instant for repeated usage.
+**User value:** Avoids hitting the API on every `tu` invocation. Quota data changes slowly — caching for 30-60 seconds with stale-while-revalidate pattern would make the tool feel instant for repeated usage.
 
 **Implementation complexity:** Medium. Write results to a cache file with timestamp; on subsequent invocations, serve from cache if fresh enough, or serve stale + fetch in background.
 
@@ -168,7 +168,7 @@ The current code in `quota.go:98-111` already handles partial failures — each 
 **Changes needed:**
 - New `internal/cmd/doctor.go`: Checks each subsystem, reports OK/WARN/FAIL
 - Uses existing `auth.IsKeyringAvailable()`, `auth.ValidateAPIKey()`, `config.LoadOrCreateConfig()`
-- Could be a new `ou doctor` subcommand
+- Could be a new `tu doctor` subcommand
 
 ---
 
@@ -190,7 +190,7 @@ The current code in `quota.go:98-111` already handles partial failures — each 
 
 **Category: OUT OF SCOPE**
 
-Shell alias install/uninstall already works for bash and zsh. Fish, nushell, and completion generation are nice-to-haves but not blocking. The existing `ou` alias is sufficient.
+Shell alias install/uninstall already works for bash and zsh. Fish, nushell, and completion generation are nice-to-haves but not blocking. The existing `tu` alias is sufficient.
 
 ---
 
@@ -214,7 +214,7 @@ The dual-path (keyring + AES-GCM encrypted file) with master password support is
 
 **Category: NEXT**
 
-**User value:** After seeing which account is best (#2, #5), users want `ou account use <name>` to switch the active opencode account. This is the natural action after quota inspection.
+**User value:** After seeing which account is best (#2, #5), users want `tu account use <name>` to switch the active opencode account. This is the natural action after quota inspection.
 
 **Implementation complexity:** Medium. Requires writing to `~/.local/share/opencode/auth.json` with the selected account's token and provider info.
 
@@ -319,7 +319,7 @@ System notifications (desktop/mobile) when quota hits thresholds require OS-spec
 ### DO NOW (v0.2.0 — immediate)
 | # | Feature | Effort | Impact |
 |---|---------|--------|--------|
-| 1 | Default `ou` dashboard | Low | High |
+| 1 | Default `tu` dashboard | Low | High |
 | 2 | Multi-account current-account marker | Low-Med | High |
 | 25 | NO_COLOR / non-TTY support | Trivial | Medium |
 
@@ -365,6 +365,6 @@ System notifications (desktop/mobile) when quota hits thresholds require OS-spec
 
 **Technical debt to address:**
 - `getConfigPath()` is duplicated across commands — should be a shared utility
-- The `account` aliases (`aa`, `al`, `ar`, `ae`, `ai`) are registered as both subcommands and root aliases — this creates confusion (e.g., `ou aa` works but `ou account aa` also works via subcommand)
+- The `account` aliases (`aa`, `al`, `ar`, `ae`, `ai`) are registered as both subcommands and root aliases — this creates confusion (e.g., `tu aa` works but `tu account aa` also works via subcommand)
 - `timeNow()` in account.go exists only for testability — should use an interface or clock abstraction
 - No tests for the TUI rendering layer (would help with #22, #24 changes)

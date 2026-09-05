@@ -1,8 +1,8 @@
-# opencode-usage CLI工具设计文档
+# token-usage CLI工具设计文档
 
 ## 概述
 
-opencode-usage是一个Go CLI工具，用于快速查询多个OpenCode账号下Go计划的使用情况、可用模型和配额信息。
+token-usage是一个Go CLI工具，用于快速查询多个OpenCode账号下Go计划的使用情况、可用模型和配额信息。
 
 ## 版本规划
 
@@ -42,9 +42,9 @@ opencode-usage是一个Go CLI工具，用于快速查询多个OpenCode账号下G
 ## 项目结构
 
 ```
-opencode-usage/
+token-usage/
 ├── cmd/
-│   └── opencode-usage/
+│   └── token-usage/
 │       └── main.go
 ├── internal/
 │   ├── auth/
@@ -69,26 +69,26 @@ opencode-usage/
 
 ## 命令设计
 
-**主命令**：`opencode-usage`（别名：`ou`）
+**主命令**：`token-usage`（别名：`tu`）
 
-**别名安装**：运行`opencode-usage alias install`自动添加shell别名到`~/.bashrc`或`~/.zshrc`
+**别名安装**：运行`token-usage alias install`自动添加shell别名到`~/.bashrc`或`~/.zshrc`
 
-**别名卸载**：运行`opencode-usage alias uninstall`自动移除shell别名
+**别名卸载**：运行`token-usage alias uninstall`自动移除shell别名
 
-**别名冲突检测**：安装前检测`ou`是否已存在别名，如冲突则提示用户确认或手动添加
+**别名冲突检测**：安装前检测`tu`是否已存在别名，如冲突则提示用户确认或手动添加
 
 **子命令结构**：
 
 | 命令 | 别名 | 功能 | 示例 |
 |------|------|------|------|
-| `account add` | `aa` | 交互式添加账号 | `ou aa` |
-| `account list` | `al` | 查看所有账号（脱敏） | `ou al` |
-| `account remove` | `ar` | 删除账号 | `ou ar work` |
-| `quota` | `q` | 查看所有账号配额 | `ou q` |
-| `quota --account <name>` | `q -n <name>` | 查看特定账号配额 | `ou q -n work` |
-| `models` | `m` | 查看可用模型列表 | `ou m` |
-| `current` | `cc` | 显示当前opencode配置的账号 | `ou cc` |
-| `help` | `h` | 显示帮助信息 | `ou h` |
+| `account add` | `aa` | 交互式添加账号 | `tu aa` |
+| `account list` | `al` | 查看所有账号（脱敏） | `tu al` |
+| `account remove` | `ar` | 删除账号 | `tu ar work` |
+| `quota` | `q` | 查看所有账号配额 | `tu q` |
+| `quota --account <name>` | `q -n <name>` | 查看特定账号配额 | `tu q -n work` |
+| `models` | `m` | 查看可用模型列表 | `tu m` |
+| `current` | `cc` | 显示当前opencode配置的账号 | `tu cc` |
+| `help` | `h` | 显示帮助信息 | `tu h` |
 
 **全局标志**：
 - `--json` / `-j`：JSON格式输出
@@ -101,7 +101,7 @@ opencode-usage/
 ### 添加账号流程
 
 ```
-$ ou aa
+$ tu aa
 
 ┌─────────────────────────────────────────┐
 │         添加 OpenCode Go 账号            │
@@ -117,7 +117,7 @@ API Key: •••••••••••••••••••••••�
 ### 查看账号列表
 
 ```
-$ ou al
+$ tu al
 
 ┌─────────┬────────────────┬────────────┬──────────────┐
 │ 名称     │ API Key        │ 状态       │ 上次验证       │
@@ -130,7 +130,7 @@ $ ou al
 ### 查看配额
 
 ```
-$ ou q
+$ tu q
 
 ┌─────────────────────────────────────────────────────────────┐
 │                    OpenCode Go 配额概览                      │
@@ -154,9 +154,9 @@ $ ou q
 1. 自动检测密钥环是否可用
 2. 如不可用，提示用户选择：
    - 交互式输入主密码（从stdin读取）
-   - 从环境变量`OPENCODE_USAGE_MASTER_PASSWORD`读取
+   - 从环境变量`TOKEN_USAGE_MASTER_PASSWORD`读取
    - 生成随机主密码并保存到文件
-3. 使用AES-256-GCM加密API Key，存储到`~/.config/opencode-usage/secrets.enc`
+3. 使用AES-256-GCM加密API Key，存储到`~/.config/token-usage/secrets.enc`
 
 **存储结构**：
 - **系统密钥环**：存储完整的API Key（加密存储）
@@ -164,7 +164,7 @@ $ ou q
 
 **数据结构**：
 ```yaml
-# ~/.config/opencode-usage/config.yaml
+# ~/.config/token-usage/config.yaml
 accounts:
   work:
     key_id: "abc123"  # 仅用于显示，存储Key的后6位
@@ -189,7 +189,7 @@ accounts:
 **OpenCode Go API端点**：
 - 基础URL：`https://opencode.ai/zen/go/v1`
 - 认证：`Authorization: Bearer <API_KEY>`
-- 自定义端点：支持通过环境变量`OPENCODE_USAGE_BASE_URL`覆盖
+- 自定义端点：支持通过环境变量`TOKEN_USAGE_BASE_URL`覆盖
 
 **核心API调用**：
 ```go
@@ -261,7 +261,7 @@ Response: {
 ### 人类可读格式（默认）
 
 ```
-$ ou q
+$ tu q
 
 ┌─────────────────────────────────────────────────────────────┐
 │                    OpenCode Go 配额概览                      │
@@ -317,7 +317,7 @@ $ ou q
 3. **端到端测试**：模拟真实使用场景
 
 **配置文件初始化**：
-1. 首次运行时自动创建`~/.config/opencode-usage/config.yaml`
+1. 首次运行时自动创建`~/.config/token-usage/config.yaml`
 2. 创建目录并设置权限为700
 3. 创建空配置文件并设置权限为600
 

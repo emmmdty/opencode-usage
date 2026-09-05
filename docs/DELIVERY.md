@@ -1,9 +1,9 @@
-# Delivery Report — opencode-usage v0.2.0 UX Refresh
+# Delivery Report — token-usage v0.2.0 UX Refresh
 
 ## 1. What Changed
 
 ### Core UX Improvements
-- **Default `ou` command now shows quota dashboard** — bare `opencode-usage` immediately shows all accounts, quota, progress bars, best available account, and next reset time
+- **Default `tu` command now shows quota dashboard** — bare `token-usage` immediately shows all accounts, quota, progress bars, best available account, and next reset time
 - **Progress bars** — visual `████░░░░` bars alongside percentages for instant scannability
 - **Best available account recommendation** — "Best available: personal" callout answers the #1 multi-account question
 - **Next reset countdown** — "Next reset: work · 4h30m" tells users when relief comes
@@ -18,7 +18,7 @@
 - **Token masking** — current config token now fully masked (was leaking suffix)
 
 ### New Commands
-- **`ou doctor`** — diagnostics: checks config, keyring, network, accounts, opencode auth
+- **`tu doctor`** — diagnostics: checks config, keyring, network, accounts, opencode auth
 
 ### Code Quality
 - **Unified design system** — `internal/tui/theme.go` with consistent color tokens
@@ -75,7 +75,7 @@
 
 | Aspect | Before | After |
 |--------|--------|-------|
-| Default `ou` | Shows cobra help | Shows quota dashboard with all accounts |
+| Default `tu` | Shows cobra help | Shows quota dashboard with all accounts |
 | Quota display | `"35% (剩余8h12m)"` | `████░░░░ 35% 4h30m` + best available + next reset |
 | CJK names | Broken alignment | Correct alignment via runewidth |
 | Error rows | `"错误: API error: HTTP 401"` | `✗ API error: HTTP 401` (red, distinct) |
@@ -83,7 +83,7 @@
 | Current account | Unknown | Shown with `→` marker |
 | Best account | Manual analysis needed | "Best available: personal" |
 | Reset time | `"剩余8h12m"` | `4h30m` |
-| Diagnostics | None | `ou doctor` checks everything |
+| Diagnostics | None | `tu doctor` checks everything |
 | Account list | Chinese text, misaligned | English, aligned, relative timestamps |
 | Help text | Chinese | English |
 | JSON output | Raw `[]accountResult` | Versioned `{"version":"1","accounts":[...]}` |
@@ -94,13 +94,13 @@
 
 | Change | User Impact |
 |--------|-------------|
-| `ou` (bare) | Now shows quota dashboard (was: help) |
-| `ou doctor` | New: diagnostics command |
-| `NO_COLOR=1 ou` | Colors disabled |
-| `ou \| cat` | Clean output, no ANSI |
-| `ou --json` | Versioned JSON schema |
-| `ou account list` | Relative timestamps, English text, current account marker |
-| `ou` (80-col) | Table fits within terminal width |
+| `tu` (bare) | Now shows quota dashboard (was: help) |
+| `tu doctor` | New: diagnostics command |
+| `NO_COLOR=1 tu` | Colors disabled |
+| `tu \| cat` | Clean output, no ANSI |
+| `tu --json` | Versioned JSON schema |
+| `tu account list` | Relative timestamps, English text, current account marker |
+| `tu` (80-col) | Table fits within terminal width |
 
 ---
 
@@ -127,19 +127,19 @@ $ go vet ./...
 VET OK
 
 $ go test ./...
-ok  github.com/opencode-usage/internal/auth
-ok  github.com/opencode-usage/internal/client
-ok  github.com/opencode-usage/internal/config
-ok  github.com/opencode-usage/internal/tui (13 tests)
-ok  github.com/opencode-usage/test
+ok  github.com/token-usage/internal/auth
+ok  github.com/token-usage/internal/client
+ok  github.com/token-usage/internal/config
+ok  github.com/token-usage/internal/tui (13 tests)
+ok  github.com/token-usage/test
 
 $ go test -race ./...
 ok  (all packages — no races)
 
-$ go build ./cmd/opencode-usage/
+$ go build ./cmd/token-usage/
 BUILD OK
 
-$ wc -L <(NO_COLOR=1 go run ./cmd/opencode-usage/)
+$ wc -L <(NO_COLOR=1 go run ./cmd/token-usage/)
 80  # fits in 80 columns
 ```
 
@@ -159,9 +159,9 @@ $ wc -L <(NO_COLOR=1 go run ./cmd/opencode-usage/)
 
 | Issue | Priority | Notes |
 |-------|----------|-------|
-| Watch/refresh mode | Medium | `ou --watch 30s` |
+| Watch/refresh mode | Medium | `tu --watch 30s` |
 | Cache with stale fallback | Medium | File-based cache, 30s TTL |
-| Account switching | Medium | `ou account use <name>` |
+| Account switching | Medium | `tu account use <name>` |
 | Configurable thresholds | Low | CLI flags for warning/danger |
 | Fish/PowerShell alias | Low | `alias install` only does bash/zsh |
 | XDG support | Low | `$XDG_CONFIG_HOME` override |
@@ -182,8 +182,8 @@ $ wc -L <(NO_COLOR=1 go run ./cmd/opencode-usage/)
 
 ### v0.3.0
 - Cache with stale fallback
-- Account switching (`ou account use <name>`)
-- Watch mode (`ou --watch`)
+- Account switching (`tu account use <name>`)
+- Watch mode (`tu --watch`)
 - Configurable thresholds
 - Shell completions (bash/zsh/fish)
 

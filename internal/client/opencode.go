@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/emmmdty/opencode-usage/internal/models"
+	"github.com/emmmdty/token-usage/internal/models"
 )
 
 type Client struct {

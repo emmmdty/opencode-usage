@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/emmmdty/opencode-usage/internal/auth"
-	"github.com/emmmdty/opencode-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/auth"
+	"github.com/emmmdty/token-usage/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +33,7 @@ var currentCmd = &cobra.Command{
 		authPath := filepath.Join(homeDir, ".local", "share", "opencode", "auth.json")
 
 		if _, err := os.Stat(authPath); os.IsNotExist(err) {
-			return writeOutput("  No opencode configuration found.\n  Run 'opencode-usage account add' to get started.\n")
+			return writeOutput("  No opencode configuration found.\n  Run 'token-usage account add' to get started.\n")
 		}
 
 		data, err := os.ReadFile(authPath)

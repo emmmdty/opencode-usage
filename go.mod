@@ -1,4 +1,4 @@
-module github.com/emmmdty/opencode-usage
+module github.com/emmmdty/token-usage
 
 go 1.26.6
 

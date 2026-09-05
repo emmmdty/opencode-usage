@@ -8,11 +8,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/emmmdty/opencode-usage/internal/auth"
-	"github.com/emmmdty/opencode-usage/internal/config"
-	"github.com/emmmdty/opencode-usage/internal/models"
-	"github.com/emmmdty/opencode-usage/internal/provider"
-	"github.com/emmmdty/opencode-usage/internal/tui"
+	"github.com/emmmdty/token-usage/internal/auth"
+	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/models"
+	"github.com/emmmdty/token-usage/internal/provider"
+	"github.com/emmmdty/token-usage/internal/tui"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -64,7 +64,7 @@ func runProvidersOverview(providerFilter string, jsonOut bool, outPath string) e
 			resp := providersResponse{Version: "1", Providers: []providerResult{}}
 			return printJSON(resp)
 		}
-		return writeOutput("  No providers configured. Run 'opencode-usage account add' or check ~/.config/opencode-usage/config.yaml\n")
+		return writeOutput("  No providers configured. Run 'token-usage account add' or check ~/.config/token-usage/config.yaml\n")
 	}
 
 	// 过滤特定 provider
@@ -153,7 +153,7 @@ func buildAllProviders(cfg *config.Config) map[string]provider.Provider {
 
 	// OpenCode accounts - 使用原有的 account 系统
 	for name := range cfg.Accounts {
-		apiKey, err := auth.GetAPIKey("opencode-usage", name)
+		apiKey, err := auth.GetAPIKey("token-usage", name)
 		if err != nil || apiKey == "" {
 			continue
 		}

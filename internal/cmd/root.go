@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/emmmdty/opencode-usage/internal/auth"
-	"github.com/emmmdty/opencode-usage/internal/config"
-	"github.com/emmmdty/opencode-usage/internal/tui"
-	"github.com/emmmdty/opencode-usage/internal/version"
+	"github.com/emmmdty/token-usage/internal/auth"
+	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/tui"
+	"github.com/emmmdty/token-usage/internal/version"
 	"github.com/muesli/termenv"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -30,8 +30,8 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "opencode-usage [provider]",
-	Aliases: []string{"ou"},
+	Use:     "token-usage [provider]",
+	Aliases: []string{"tu"},
 	Short:   "Multi-provider AI coding tool usage monitor",
 	Long:    "Monitor usage across OpenCode, Claude, Codex, and Volcengine providers.",
 	Version: version.Version,
@@ -115,7 +115,7 @@ var updateCmd = &cobra.Command{
 		binaryURL, err := getBinaryURL(release)
 		if err != nil {
 			if len(release.Assets) == 0 {
-				return fmt.Errorf("update is unavailable (no release assets found for tag %s); please install manually from https://github.com/emmmdty/opencode-usage/releases", release.TagName)
+				return fmt.Errorf("update is unavailable (no release assets found for tag %s); please install manually from https://github.com/emmmdty/token-usage/releases", release.TagName)
 			}
 			return fmt.Errorf("no binary found for your platform (%s/%s): %w", runtime.GOOS, runtime.GOARCH, err)
 		}
@@ -168,7 +168,7 @@ func doGitHubRequest(url string, token string) (*http.Response, error) {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("User-Agent", "opencode-usage/"+version.Version)
+	req.Header.Set("User-Agent", "token-usage/"+version.Version)
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -179,7 +179,7 @@ func getLatestRelease() (*githubRelease, error) {
 	token := getGitHubToken()
 
 	// Try releases/latest
-	resp, err := doGitHubRequest("https://api.github.com/repos/emmmdty/opencode-usage/releases/latest", token)
+	resp, err := doGitHubRequest("https://api.github.com/repos/emmmdty/token-usage/releases/latest", token)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +198,7 @@ func getLatestRelease() (*githubRelease, error) {
 	}
 
 	// Fallback: list tags
-	resp2, err := doGitHubRequest("https://api.github.com/repos/emmmdty/opencode-usage/tags?per_page=10", token)
+	resp2, err := doGitHubRequest("https://api.github.com/repos/emmmdty/token-usage/tags?per_page=10", token)
 	if err != nil {
 		return nil, err
 	}
@@ -293,8 +293,8 @@ func getBinaryURL(release *githubRelease) (string, error) {
 	}
 
 	// Match naming pattern from .goreleaser.yml
-	// e.g. opencode-usage_linux_amd64, opencode-usage_darwin_arm64, opencode-usage_windows_amd64.exe
-	target := fmt.Sprintf("opencode-usage_%s_%s%s", goos, goarch, suffix)
+	// e.g. token-usage_linux_amd64, token-usage_darwin_arm64, token-usage_windows_amd64.exe
+	target := fmt.Sprintf("token-usage_%s_%s%s", goos, goarch, suffix)
 
 	for _, asset := range release.Assets {
 		if asset.Name == target {
@@ -304,7 +304,7 @@ func getBinaryURL(release *githubRelease) (string, error) {
 
 	// Fallback: try tar.gz for non-windows
 	if goos != "windows" {
-		tarName := fmt.Sprintf("opencode-usage_%s_%s.tar.gz", goos, goarch)
+		tarName := fmt.Sprintf("token-usage_%s_%s.tar.gz", goos, goarch)
 		for _, asset := range release.Assets {
 			if asset.Name == tarName {
 				return asset.BrowserDownloadURL, nil
@@ -337,10 +337,10 @@ func downloadBinary(url string) (string, error) {
 		dir = os.TempDir()
 	}
 
-	tmpFile, err := os.CreateTemp(dir, ".opencode-usage-update-*")
+	tmpFile, err := os.CreateTemp(dir, ".token-usage-update-*")
 	if err != nil {
 		// Fall back to the system temp dir if the install dir is not writable.
-		tmpFile, err = os.CreateTemp("", "opencode-usage-update-*")
+		tmpFile, err = os.CreateTemp("", "token-usage-update-*")
 		if err != nil {
 			return "", err
 		}
@@ -378,5 +378,5 @@ func getConfigPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return homeDir + "/.config/opencode-usage/config.yaml", nil
+	return homeDir + "/.config/token-usage/config.yaml", nil
 }

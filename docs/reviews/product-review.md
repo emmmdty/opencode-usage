@@ -1,4 +1,4 @@
-# Product Review: opencode-usage
+# Product Review: token-usage
 
 **Reviewer:** Subagent F (Product Reviewer)
 **Date:** 2026-08-26
@@ -13,11 +13,11 @@
 Query OpenCode Go plan usage across multiple accounts, view available models and quota information.
 
 Usage:
-  opencode-usage [flags]
-  opencode-usage [command]
+  token-usage [flags]
+  token-usage [command]
 
 Aliases:
-  opencode-usage, ou
+  token-usage, tu
 
 Available Commands:
   account     Manage OpenCode Go accounts
@@ -33,17 +33,17 @@ Available Commands:
 
 Flags:
   -n, --account string   specify account
-  -h, --help             help for opencode-usage
+  -h, --help             help for token-usage
   -j, --json             JSON output
       --no-color         disable color output
   -o, --output string    output to file
-  -v, --version          version for opencode-usage
+  -v, --version          version for token-usage
 
-Use "opencode-usage [command] --help" for more information about a command.
+Use "token-usage [command] --help" for more information about a command.
 ```
 
 **Assessment:**
-- **Better than previous?** Yes. The one-liner summary at the top clearly explains what the tool does. The `ou` alias is discoverable. The subcommand list is well-organized and scannable.
+- **Better than previous?** Yes. The one-liner summary at the top clearly explains what the tool does. The `tu` alias is discoverable. The subcommand list is well-organized and scannable.
 - **Still confusing?** Minor: "Manage shell aliases" is opaque — a user wouldn't know what aliases without trying it. The `current` command doesn't say "of opencode" in the description. But these are nitpicks.
 - **What would keep a user using it?** The help is concise enough that a user can get started in one glance. The `account add` flow is discoverable from the help tree.
 
@@ -81,10 +81,10 @@ exit status 1
 ```
 
 Wait — I ran `account add` which requires interactive input. Let me note what I observed:
-- `account add` without a name argument shows: `Account name: Error: failed to read account name: EOF` — the error is printed twice (once from the prompt reader, once from the CLI wrapper), which is noisy. The message "failed to read account name: EOF" is technically correct but not user-friendly. A better message: "Account name is required. Usage: opencode-usage account add <name>"
+- `account add` without a name argument shows: `Account name: Error: failed to read account name: EOF` — the error is printed twice (once from the prompt reader, once from the CLI wrapper), which is noisy. The message "failed to read account name: EOF" is technically correct but not user-friendly. A better message: "Account name is required. Usage: token-usage account add <name>"
 - `doctor` output is excellent:
   ```
-  [OK] Config file          /home/tjk/.config/opencode-usage/config.yaml
+  [OK] Config file          /home/tjk/.config/token-usage/config.yaml
   [OK] Accounts             3 configured
   [!!] Keyring              using encrypted file fallback
   [OK] Network              opencode.ai reachable
@@ -130,7 +130,7 @@ Wait — I ran `account add` which requires interactive input. Let me note what 
 Manage OpenCode Go accounts
 
 Usage:
-  opencode-usage account [command]
+  token-usage account [command]
 
 Aliases:
   account, a
@@ -151,7 +151,7 @@ Global Flags:
       --no-color         disable color output
   -o, --output string    output to file
 
-Use "opencode-usage account [command] --help" for more information about a command.
+Use "token-usage account [command] --help" for more information about a command.
 ```
 
 And `account add --help`:
@@ -159,7 +159,7 @@ And `account add --help`:
 Add a new account
 
 Usage:
-  opencode-usage account add [flags]
+  token-usage account add [flags]
 
 Aliases:
   add, aa
@@ -211,7 +211,7 @@ Global Flags:
 2. **`doctor` command** — self-service diagnostics eliminate support burden
 3. **Responsive width** — graceful degradation for narrow terminals and pipes
 4. **Clean JSON output** — versioned, consistent schema for scripting
-5. **Help text quality** — concise, accurate, with useful aliases (`ou`, `a`, `aa`)
+5. **Help text quality** — concise, accurate, with useful aliases (`tu`, `a`, `aa`)
 
 ### What is still confusing?
 
@@ -223,7 +223,7 @@ Global Flags:
 ### What would make a user keep using this tool?
 
 1. **It solves a real problem** — multi-account quota management is genuinely useful, and this tool does it in one glance
-2. **The default view is the right view** — running `opencode-usage` with no arguments gives you everything you need
+2. **The default view is the right view** — running `token-usage` with no arguments gives you everything you need
 3. **It stays out of your way** — no config files to edit, no auth tokens to manage manually (the tool discovers them from opencode's existing config)
 4. **It scales** — the JSON output and shell aliases mean it fits into power-user workflows without friction
 

@@ -19,9 +19,9 @@ func init() {
 	homeDir, _ := os.UserHomeDir()
 
 	cfg := keyring.Config{
-		ServiceName: "opencode-usage",
+		ServiceName: "token-usage",
 		FilePasswordFunc: func(prompt string) (string, error) {
-			if pwd := os.Getenv("OPENCODE_USAGE_KEYRING_PASSWORD"); pwd != "" {
+			if pwd := os.Getenv("TOKEN_USAGE_KEYRING_PASSWORD"); pwd != "" {
 				return pwd, nil
 			}
 			return "", fmt.Errorf("keyring password not available in non-interactive mode")
@@ -29,7 +29,7 @@ func init() {
 	}
 
 	if homeDir != "" {
-		cfg.FileDir = filepath.Join(homeDir, ".config", "opencode-usage", "keyring")
+		cfg.FileDir = filepath.Join(homeDir, ".config", "token-usage", "keyring")
 	}
 
 	var err error
@@ -40,7 +40,7 @@ func init() {
 		return
 	}
 
-	testKey := "__opencode_usage_test__"
+	testKey := "__token_usage_test__"
 	if err := ring.Set(keyring.Item{Key: testKey, Data: []byte("test")}); err != nil {
 		ring = nil
 		keyringAvailable = false

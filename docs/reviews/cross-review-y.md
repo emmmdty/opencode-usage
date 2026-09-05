@@ -26,23 +26,23 @@
 ### [CY-2] `go install` is completely broken — both README path and go.mod path fail
 - **Severity**: BLOCKER
 - **Category**: Installation / Documentation
-- **Description**: There is no working `go install` path for this project. The README instructs users to run `go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@latest`, but:
-  1. The `go.mod` declares `module github.com/opencode-usage` (no `emmmdty` org prefix)
-  2. `go install github.com/emmmdty/opencode-usage/...` fails with: `module declares its path as: github.com/opencode-usage but was required as: github.com/emmmdty/opencode-usage`
-  3. `go install github.com/opencode-usage/cmd/opencode-usage@latest` fails with: `Repository not found` (no such GitHub repo exists at that path)
+- **Description**: There is no working `go install` path for this project. The README instructs users to run `go install github.com/emmmdty/token-usage/cmd/token-usage@latest`, but:
+  1. The `go.mod` declares `module github.com/token-usage` (no `emmmdty` org prefix)
+  2. `go install github.com/emmmdty/token-usage/...` fails with: `module declares its path as: github.com/token-usage but was required as: github.com/emmmdty/token-usage`
+  3. `go install github.com/token-usage/cmd/token-usage@latest` fails with: `Repository not found` (no such GitHub repo exists at that path)
 - **Evidence**: Both commands executed and confirmed failing:
   ```
-  $ go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@latest
-  go: github.com/emmmdty/opencode-usage@v0.1.0: version constraints conflict:
-      module declares its path as: github.com/opencode-usage
-              but was required as: github.com/emmmdty/opencode-usage
+  $ go install github.com/emmmdty/token-usage/cmd/token-usage@latest
+  go: github.com/emmmdty/token-usage@v0.1.0: version constraints conflict:
+      module declares its path as: github.com/token-usage
+              but was required as: github.com/emmmdty/token-usage
 
-  $ go install github.com/opencode-usage/cmd/opencode-usage@latest
-  go: github.com/opencode-usage/cmd/opencode-usage@latest: module not found:
+  $ go install github.com/token-usage/cmd/token-usage@latest
+  go: github.com/token-usage/cmd/token-usage@latest: module not found:
       remote: Repository not found.
   ```
 - **Impact**: The primary installation method documented in the README does not work. Users who follow the instructions get a confusing error. The only working installation methods are "download binary" and "build from source" (which requires cloning).
-- **Suggested Fix**: Either (a) change `go.mod` to `module github.com/emmmdty/opencode-usage` to match the actual GitHub repo, or (b) update the README to use the correct `go install` path if the module path is correct and the repo needs to be published at that path. Option (a) is simplest.
+- **Suggested Fix**: Either (a) change `go.mod` to `module github.com/emmmdty/token-usage` to match the actual GitHub repo, or (b) update the README to use the correct `go install` path if the module path is correct and the repo needs to be published at that path. Option (a) is simplest.
 
 ---
 
@@ -75,12 +75,12 @@
 ### [CY-5] `service` parameter is dead code in all auth credential functions
 - **Severity**: MINOR
 - **Category**: Code Quality / API Design
-- **Description**: `auth.StoreAPIKey(service, account, apiKey)`, `auth.GetAPIKey(service, account)`, and `auth.DeleteAPIKey(service, account)` all accept a `service` string parameter that is never used inside the function body. The keyring is opened with `ServiceName: "opencode-usage"` in `init()` (credential.go:20), which is the only place the service name matters. Every caller passes `"opencode-usage"` as the service argument, making the parameter pure dead code.
+- **Description**: `auth.StoreAPIKey(service, account, apiKey)`, `auth.GetAPIKey(service, account)`, and `auth.DeleteAPIKey(service, account)` all accept a `service` string parameter that is never used inside the function body. The keyring is opened with `ServiceName: "token-usage"` in `init()` (credential.go:20), which is the only place the service name matters. Every caller passes `"token-usage"` as the service argument, making the parameter pure dead code.
 - **Evidence**:
   - `credential.go:55-62`: `StoreAPIKey` body uses `ring.Set(keyring.Item{Key: account, ...})` — no reference to `service`
   - `credential.go:65-73`: `GetAPIKey` body uses `ring.Get(account)` — no reference to `service`
   - `credential.go:76-80`: `DeleteAPIKey` body uses `ring.Remove(account)` — no reference to `service`
-  - All callers: `auth.StoreAPIKey("opencode-usage", name, apiKey)`, `auth.GetAPIKey("opencode-usage", name)`, etc.
+  - All callers: `auth.StoreAPIKey("token-usage", name, apiKey)`, `auth.GetAPIKey("token-usage", name)`, etc.
 - **Impact**: Misleading API surface. A future developer might think different service names provide isolation, but they don't. The parameter creates a false sense of configurability.
 - **Suggested Fix**: Remove the `service` parameter from the function signatures, or actually use it (e.g., prefix keyring keys with `service + ":"`).
 
@@ -89,7 +89,7 @@
 ### [CY-6] `doctor` command ignores `--no-color` CLI flag — uses raw ANSI regardless
 - **Severity**: MAJOR
 - **Category**: UX / CLI Flags
-- **Description**: The `doctor` command creates its own theme via `newDoctorTheme()` (doctor.go:99-104) which only checks `os.Getenv("NO_COLOR")` and `isTerminal()`. It does NOT check the `noColor` global variable set by the `--no-color` CLI flag. When a user runs `opencode-usage --no-color doctor`, the PersistentPreRun in root.go disables lipgloss color, but doctor's own ANSI escape codes (`\033[32m`, `\033[33m`, `\033[31m`) are emitted unconditionally.
+- **Description**: The `doctor` command creates its own theme via `newDoctorTheme()` (doctor.go:99-104) which only checks `os.Getenv("NO_COLOR")` and `isTerminal()`. It does NOT check the `noColor` global variable set by the `--no-color` CLI flag. When a user runs `token-usage --no-color doctor`, the PersistentPreRun in root.go disables lipgloss color, but doctor's own ANSI escape codes (`\033[32m`, `\033[33m`, `\033[31m`) are emitted unconditionally.
 - **Evidence**:
   - `root.go:30-33`: PersistentPreRun checks `noColor` flag and calls `tui.DisableColor()`
   - `doctor.go:99-104`: `newDoctorTheme()` checks `os.Getenv("NO_COLOR")` (env var only, not the flag) and `isTerminal()`
@@ -132,7 +132,7 @@
 - **Category**: Reliability / Data Integrity
 - **Description**: The `account import` command (account.go:296-378) loops through accounts and for each one: (1) validates via HTTP, (2) stores the key in the keyring/encrypted file, (3) adds to in-memory config. After the loop, it saves the config (line 372). If the config save fails after some keys were successfully stored, those keys become orphaned — they exist in the keyring but not in the config. Unlike CC-02 (single account add), import can orphan MULTIPLE keys in one operation. Additionally, if the import is interrupted (Ctrl+C) mid-loop, already-stored keys have no config entries and no cleanup mechanism.
 - **Evidence**:
-  - `account.go:356`: `auth.StoreAPIKey("opencode-usage", account.Name, account.APIKey)` — stores key
+  - `account.go:356`: `auth.StoreAPIKey("token-usage", account.Name, account.APIKey)` — stores key
   - `account.go:362-367`: Adds to in-memory config
   - `account.go:372`: `config.SaveConfig(cfg, configPath)` — saves after loop
   - Between lines 356 and 372, multiple keys can be stored with no rollback if save fails
@@ -172,28 +172,28 @@
 - **Description**: `internal/version/version.go:6-8` defines `Version = "0.1.0"`, `Commit = "none"`, `Date = "unknown"`. These are set at compile time via `-ldflags` (standard Go practice), but the `.goreleaser.yml` does not configure ldflags to inject version/commit/date. The goreleaser config (line 3-5) only specifies `binary` and `main` — no `ldflags` section. This means release binaries will always report `commit: none, built: unknown`.
 - **Evidence**:
   - `version.go:6-8`: `Version = "0.1.0"`, `Commit = "none"`, `Date = "unknown"` — default values
-  - `.goreleaser.yml:3-5`: `builds: - binary: opencode-usage` — no ldflags configured
-  - Running `./opencode-usage version` outputs: `opencode-usage 0.1.0 (commit: none, built: unknown)`
+  - `.goreleaser.yml:3-5`: `builds: - binary: token-usage` — no ldflags configured
+  - Running `./token-usage version` outputs: `token-usage 0.1.0 (commit: none, built: unknown)`
 - **Impact**: Users cannot verify which commit a binary was built from. This makes bug reports harder to triage and release verification impossible.
 - **Suggested Fix**: Add ldflags to `.goreleaser.yml`:
   ```yaml
   builds:
     - ldflags:
         - -s -w
-        - -X github.com/opencode-usage/internal/version.Version={{.Version}}
-        - -X github.com/opencode-usage/internal/version.Commit={{.ShortCommit}}
-        - -X github.com/opencode-usage/internal/version.Date={{.Date}}
+        - -X github.com/token-usage/internal/version.Version={{.Version}}
+        - -X github.com/token-usage/internal/version.Commit={{.ShortCommit}}
+        - -X github.com/token-usage/internal/version.Date={{.Date}}
   ```
 
 ---
 
-### [CY-13] `account add` success message says "Run 'ou' to view" but alias may not be installed
+### [CY-13] `account add` success message says "Run 'tu' to view" but alias may not be installed
 - **Severity**: NIT
 - **Category**: UX / Copy
-- **Description**: After successfully adding an account, `accountAddCmd` prints `"Run 'ou' to view all accounts."` (account.go:93). However, `ou` is a shell alias that must be explicitly installed via `opencode-usage alias install`. If the user hasn't installed the alias, running `ou` gives "command not found". The message should reference the full binary name `opencode-usage` (or `opencode-usage quota`).
-- **Evidence**: `account.go:93`: `fmt.Println("Run 'ou' to view all accounts.")`
+- **Description**: After successfully adding an account, `accountAddCmd` prints `"Run 'tu' to view all accounts."` (account.go:93). However, `tu` is a shell alias that must be explicitly installed via `token-usage alias install`. If the user hasn't installed the alias, running `tu` gives "command not found". The message should reference the full binary name `token-usage` (or `token-usage quota`).
+- **Evidence**: `account.go:93`: `fmt.Println("Run 'tu' to view all accounts.")`
 - **Impact**: Minor UX confusion. New users who just ran `account add` haven't necessarily installed the alias.
-- **Suggested Fix**: Change to `"Run 'opencode-usage' to view all accounts."` or `"Run 'opencode-usage quota' to view all accounts."`.
+- **Suggested Fix**: Change to `"Run 'token-usage' to view all accounts."` or `"Run 'token-usage quota' to view all accounts."`.
 
 ---
 
@@ -213,7 +213,7 @@
 | CY-10 | MINOR | Code Quality | Auth JSON path duplicated in 3 files |
 | CY-11 | NIT | TUI / UX | `computeSummary` merges errors + high-usage as "critical" |
 | CY-12 | MINOR | Release | `version` command shows placeholder values in releases |
-| CY-13 | NIT | UX / Copy | Success message references `ou` alias that may not exist |
+| CY-13 | NIT | UX / Copy | Success message references `tu` alias that may not exist |
 
 **Severity counts**: BLOCKER: 1 | MAJOR: 5 | MINOR: 5 | NIT: 2
 

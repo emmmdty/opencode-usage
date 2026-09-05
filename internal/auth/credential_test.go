@@ -11,7 +11,7 @@ func TestKeyringOperations(t *testing.T) {
 	// file fallback with an explicit master password, which is deterministic
 	// everywhere (an interactive system keyring is not available in CI and
 	// would hang the test).
-	t.Setenv("OPENCODE_USAGE_MASTER_PASSWORD", "ci-test-master-password")
+	t.Setenv("TOKEN_USAGE_MASTER_PASSWORD", "ci-test-master-password")
 	setTestSecretsPath(t)
 	resetMasterPasswordCache()
 
@@ -21,7 +21,7 @@ func TestKeyringOperations(t *testing.T) {
 	ring = nil
 	defer func() { ring = origRing }()
 
-	serviceName := "opencode-usage-test"
+	serviceName := "token-usage-test"
 	accountName := "test-account"
 	apiKey := "sk-test1234567890"
 

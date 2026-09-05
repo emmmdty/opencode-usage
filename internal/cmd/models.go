@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/emmmdty/opencode-usage/internal/auth"
-	"github.com/emmmdty/opencode-usage/internal/client"
-	"github.com/emmmdty/opencode-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/auth"
+	"github.com/emmmdty/token-usage/internal/client"
+	"github.com/emmmdty/token-usage/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -57,11 +57,11 @@ func getAPIKeyForCommand() (string, error) {
 	configureAuthFromConfig(cfg)
 
 	if account != "" {
-		return auth.GetAPIKey("opencode-usage", account)
+		return auth.GetAPIKey("token-usage", account)
 	}
 
 	if len(cfg.Accounts) == 0 {
-		return "", fmt.Errorf("no accounts configured. Run 'opencode-usage account add' first")
+		return "", fmt.Errorf("no accounts configured. Run 'token-usage account add' first")
 	}
 
 	names := make([]string, 0, len(cfg.Accounts))
@@ -70,7 +70,7 @@ func getAPIKeyForCommand() (string, error) {
 	}
 	sort.Strings(names)
 
-	return auth.GetAPIKey("opencode-usage", names[0])
+	return auth.GetAPIKey("token-usage", names[0])
 }
 
 func init() {

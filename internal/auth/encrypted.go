@@ -25,7 +25,7 @@ var (
 	passwordMu           sync.RWMutex
 )
 
-const defaultPassword = "opencode-usage-default"
+const defaultPassword = "token-usage-default"
 
 func SetUseMasterPassword(enabled *bool) {
 	useMasterPassword = enabled
@@ -36,7 +36,7 @@ func GetMasterPasswordMode() *bool {
 }
 
 const (
-	encryptedDir  = ".config/opencode-usage"
+	encryptedDir  = ".config/token-usage"
 	encryptedFile = "secrets.enc"
 	saltSize      = 16
 	keySize       = 32
@@ -60,7 +60,7 @@ func getEncryptedPath() (string, error) {
 
 func doInitMasterPassword() {
 	// Try to get from environment variable
-	if pwd := os.Getenv("OPENCODE_USAGE_MASTER_PASSWORD"); pwd != "" {
+	if pwd := os.Getenv("TOKEN_USAGE_MASTER_PASSWORD"); pwd != "" {
 		passwordMu.Lock()
 		cachedMasterPassword = pwd
 		passwordMu.Unlock()

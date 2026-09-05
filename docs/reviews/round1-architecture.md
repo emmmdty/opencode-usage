@@ -81,7 +81,7 @@
 - **Severity**: MINOR
 - **File(s)**: `internal/cmd/current.go:29-58`, `internal/cmd/doctor.go:60-82`, `internal/cmd/account.go:115,156,224,288-291,332-376`, `internal/cmd/models.go:39-42`
 - **Description**: Most commands write output directly to `os.Stdout` via `fmt.Println`/`fmt.Printf`, while the quota command uses `writeOutput()`. The `writeOutput` function respects `--output` file redirection, but direct `fmt.Println` calls bypass it entirely.
-- **Impact**: `--output` flag only works for quota output. Running `opencode-usage account list --output foo.txt` silently ignores the flag. Inconsistent output behavior confuses users and complicates testing.
+- **Impact**: `--output` flag only works for quota output. Running `token-usage account list --output foo.txt` silently ignores the flag. Inconsistent output behavior confuses users and complicates testing.
 - **Suggested Improvement**: All commands should use `writeOutput()` (or a similar abstraction) for user-facing text. Direct `fmt.Println` should only be used for debug/development output.
 
 ---

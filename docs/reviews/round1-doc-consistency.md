@@ -12,9 +12,9 @@
 - **Severity**: MAJOR
 - **Location**: README.md (entire file)
 - **Claim**: README features and usage sections omit the `doctor` command entirely
-- **Reality**: `ou doctor` is fully implemented (`internal/cmd/doctor.go`), registered in `root.go`, and works at runtime. It checks config, keyring, network, accounts, and opencode auth. It appears in `--help` output.
+- **Reality**: `tu doctor` is fully implemented (`internal/cmd/doctor.go`), registered in `root.go`, and works at runtime. It checks config, keyring, network, accounts, and opencode auth. It appears in `--help` output.
 - **Impact**: Users cannot discover the diagnostics command from the README. This is a useful self-service troubleshooting tool.
-- **Fix**: Add a "Diagnostics" section to README with `opencode-usage doctor` usage.
+- **Fix**: Add a "Diagnostics" section to README with `token-usage doctor` usage.
 
 ### [F02] README does not document `--output` / `-o` flag
 - **Severity**: MAJOR
@@ -36,13 +36,13 @@
 - **Severity**: BLOCKER
 - **Location**: README.md:131-140 (exit codes table)
 - **Claim**: README documents exit codes 0-7 with specific meanings (2=usage error, 3=auth failure, 4=network error, 5=config error, 6=config not found, 7=keyring unavailable)
-- **Reality**: `cmd/opencode-usage/main.go:13` calls `os.Exit(1)` for all errors. No code path in the entire codebase uses `os.Exit(2)` through `os.Exit(7)`. Cobra's `SilenceUsage: true` on root means cobra won't exit with code 2 on usage errors. All commands return errors that are caught by `main()` and exit with code 1.
+- **Reality**: `cmd/token-usage/main.go:13` calls `os.Exit(1)` for all errors. No code path in the entire codebase uses `os.Exit(2)` through `os.Exit(7)`. Cobra's `SilenceUsage: true` on root means cobra won't exit with code 2 on usage errors. All commands return errors that are caught by `main()` and exit with code 1.
 - **Impact**: Users scripting around exit codes will get incorrect behavior. The documented contract is broken. A script checking `if [ $? -eq 3 ]` for auth failure will never trigger.
 - **Fix**: Either implement proper exit codes in `main.go` or remove the exit code table from README. Implementing is preferred: catch typed errors and map to exit codes.
 
 ### [F05] Design doc says Go 1.22+, go.mod requires Go 1.26.6
 - **Severity**: MAJOR
-- **Location**: docs/superpowers/specs/2026-08-24-opencode-usage-design.md:26 vs go.mod:3
+- **Location**: docs/superpowers/specs/2026-08-24-token-usage-design.md:26 vs go.mod:3
 - **Claim**: Design doc states "Go 1.22+" as tech stack requirement
 - **Reality**: `go.mod` specifies `go 1.26.6`. The binary builds and runs on this version. Go 1.26.6 is a much higher requirement than 1.22.
 - **Impact**: Users on Go 1.22-1.25 cannot build from source as documented. README's "Build from source" section will fail for these users.
@@ -51,8 +51,8 @@
 ### [F06] Delivery report says v0.2.0, version.go says 0.1.0
 - **Severity**: MAJOR
 - **Location**: docs/DELIVERY.md:1 vs internal/version/version.go:6
-- **Claim**: DELIVERY.md title says "opencode-usage v0.2.0 UX Refresh"
-- **Reality**: `internal/version/version.go` has `Version = "0.1.0"`. Running `opencode-usage version` outputs `opencode-usage 0.1.0`.
+- **Claim**: DELIVERY.md title says "token-usage v0.2.0 UX Refresh"
+- **Reality**: `internal/version/version.go` has `Version = "0.1.0"`. Running `token-usage version` outputs `token-usage 0.1.0`.
 - **Impact**: Version mismatch between documentation and actual binary. Confusing for users and release management.
 - **Fix**: Update `version.go` to `0.2.0` if this is indeed the v0.2.0 release, or update DELIVERY.md to reflect the actual version.
 
@@ -88,16 +88,16 @@
 - **Location**: README.md:68 (JSON output feature), internal/cmd/account.go:98-161
 - **Claim**: README says "JSON output — Machine-readable output with `--json`" as a general feature
 - **Reality**: `account list` ignores the `--json` flag. Its `RunE` always produces formatted text output. Only `quota` and `models` commands honor `--json`.
-- **Impact**: Users expect `ou account list --json` to produce JSON but get formatted text. Inconsistent behavior across commands.
+- **Impact**: Users expect `tu account list --json` to produce JSON but get formatted text. Inconsistent behavior across commands.
 - **Fix**: Add JSON output support to `account list` or clarify in README that `--json` only works with `quota` and `models`.
 
 ### [F10] Root command default behavior not documented
 - **Severity**: MAJOR
 - **Location**: README.md
-- **Claim**: README does not mention that running bare `opencode-usage` shows the quota dashboard
+- **Claim**: README does not mention that running bare `token-usage` shows the quota dashboard
 - **Reality**: The root command's `RunE` (`internal/cmd/root.go:41`) calls `runQuotaOverview()`, displaying the full quota dashboard. This is the primary use case.
-- **Impact**: Users may not realize they can just run `opencode-usage` without any subcommand. The most important UX behavior is undocumented.
-- **Fix**: Add a "Quick Start" section showing `opencode-usage` or `ou` as the primary way to check quota.
+- **Impact**: Users may not realize they can just run `token-usage` without any subcommand. The most important UX behavior is undocumented.
+- **Fix**: Add a "Quick Start" section showing `token-usage` or `tu` as the primary way to check quota.
 
 ### [F11] JSON output field name inconsistency: "quota" vs "usage"
 - **Severity**: MINOR
@@ -126,20 +126,20 @@
 ### [F14] Go module path mismatch with README install path
 - **Severity**: MINOR
 - **Location**: go.mod:1 vs README.md:21
-- **Claim**: README says `go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@latest`
-- **Reality**: `go.mod` declares module as `github.com/opencode-usage` (no `emmmdty` org prefix). The `go install` command may fail because the module path doesn't match the repository path.
-- **Impact**: `go install` from README will fail unless the actual GitHub repo is at `github.com/emmmdty/opencode-usage` and the go.mod path is overridden. If the repo is at `github.com/opencode-usage`, the README path is wrong.
+- **Claim**: README says `go install github.com/emmmdty/token-usage/cmd/token-usage@latest`
+- **Reality**: `go.mod` declares module as `github.com/token-usage` (no `emmmdty` org prefix). The `go install` command may fail because the module path doesn't match the repository path.
+- **Impact**: `go install` from README will fail unless the actual GitHub repo is at `github.com/emmmdty/token-usage` and the go.mod path is overridden. If the repo is at `github.com/token-usage`, the README path is wrong.
 - **Fix**: Align go.mod module path with the actual GitHub repository URL, or update README install path to match go.mod.
 
-### [F15] README does not document `OPENCODE_USAGE_BASE_URL` env var
+### [F15] README does not document `TOKEN_USAGE_BASE_URL` env var
 - **Severity**: MINOR
 - **Location**: README.md
 - **Claim**: README does not mention environment variables at all
 - **Reality**: Code supports:
   - `NO_COLOR` — disable colors (root.go:31, theme.go:17)
-  - `OPENCODE_USAGE_KEYRING_PASSWORD` — keyring file password (credential.go:22)
-  - `OPENCODE_USAGE_MASTER_PASSWORD` — master password for encrypted storage (encrypted.go:55)
-  - `OPENCODE_USAGE_BASE_URL` — custom API base URL (validator.go:23)
+  - `TOKEN_USAGE_KEYRING_PASSWORD` — keyring file password (credential.go:22)
+  - `TOKEN_USAGE_MASTER_PASSWORD` — master password for encrypted storage (encrypted.go:55)
+  - `TOKEN_USAGE_BASE_URL` — custom API base URL (validator.go:23)
   - `SHELL` — determines which RC file to modify for alias install (alias.go:27)
 - **Impact**: Power users and enterprise deployments cannot discover configuration via environment variables.
 - **Fix**: Add an "Environment Variables" section to README.
@@ -179,15 +179,15 @@
 ### [F20] `version` command output format not documented
 - **Severity**: NIT
 - **Location**: README.md:99
-- **Claim**: README shows `opencode-usage version` with no expected output
-- **Reality**: Outputs `opencode-usage 0.1.0 (commit: none, built: unknown)`
+- **Claim**: README shows `token-usage version` with no expected output
+- **Reality**: Outputs `token-usage 0.1.0 (commit: none, built: unknown)`
 - **Impact**: Very minor. Users can see it by running the command.
 - **Fix**: Optionally show expected output in README.
 
 ### [F21] `update` command does not actually update
 - **Severity**: MAJOR
 - **Location**: README.md:100, internal/cmd/root.go:67-75
-- **Claim**: README shows `opencode-usage update` as a command, implying it performs an update
+- **Claim**: README shows `token-usage update` as a command, implying it performs an update
 - **Reality**: `updateCmd.RunE` only prints the current version and a URL to check manually. It does not download or install anything.
 - **Impact**: Users expect `update` to auto-update but it's just a redirect to GitHub releases.
 - **Fix**: Either implement actual update logic or rename to `update --check` / document that it only shows the update URL.
@@ -210,7 +210,7 @@
 
 ### [F24] Design doc version planning is stale
 - **Severity**: MINOR
-- **Location**: docs/superpowers/specs/2026-08-24-opencode-usage-design.md:8-16
+- **Location**: docs/superpowers/specs/2026-08-24-token-usage-design.md:8-16
 - **Claim**: Design doc says import/export is v0.3 feature, models is v0.2
 - **Reality**: Import, export, models, and doctor are all implemented in the current codebase (v0.1.0 per version.go).
 - **Impact**: Design doc doesn't reflect actual implementation state. Misleading for future contributors.
@@ -253,7 +253,7 @@
 | --output / -o | ✗ NOT documented | ✓ (global flag) | ✓ (root.go:80) | ✗ no unit test | ✓ writes to file |
 | --no-color | ✗ NOT documented | ✓ (global flag) | ✓ (root.go:81) | ✗ no unit test | ✓ disables colors |
 | completion | ✗ NOT documented | ✓ (auto-generated) | ✓ (cobra built-in) | ✗ no unit test | ✓ generates completions |
-| bare `ou` → dashboard | ✗ NOT documented | N/A | ✓ (root.go:41) | ✗ no unit test | ✓ shows quota dashboard |
+| bare `tu` → dashboard | ✗ NOT documented | N/A | ✓ (root.go:41) | ✗ no unit test | ✓ shows quota dashboard |
 
 ---
 
@@ -309,4 +309,4 @@ The documentation is substantially correct for what it covers, but has significa
 2. **10 MAJORs**: Missing feature documentation (doctor, --output, --no-color), version mismatches, Chinese text contradicting English-only claims, incomplete JSON support on account list, undocumented default behavior, module path mismatch, misleading update command
 3. **9 MINORs**: Missing env var docs, config options, Go version requirement, JSON schema, stale design docs
 
-The README needs a pass to: (a) add doctor, --output, --no-color, env vars, config options, Go version requirement, (b) fix exit codes table, (c) document default `ou` → dashboard behavior, (d) clarify update command is informational only.
+The README needs a pass to: (a) add doctor, --output, --no-color, env vars, config options, Go version requirement, (b) fix exit codes table, (c) document default `tu` → dashboard behavior, (d) clarify update command is informational only.

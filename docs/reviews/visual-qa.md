@@ -6,7 +6,7 @@
 
 ---
 
-## Command 1: `NO_COLOR=1 opencode-usage` (Dashboard)
+## Command 1: `NO_COLOR=1 token-usage` (Dashboard)
 
 ```
   OpenCode Go  refreshed 16:22:33
@@ -43,17 +43,17 @@
 
 ---
 
-## Command 2: `opencode-usage --help`
+## Command 2: `token-usage --help`
 
 ```
 Query OpenCode Go plan usage across multiple accounts, view available models and quota information.
 
 Usage:
-  opencode-usage [flags]
-  opencode-usage [command]
+  token-usage [flags]
+  token-usage [command]
 
 Aliases:
-  opencode-usage, ou
+  token-usage, tu
 
 Available Commands:
   account     Manage OpenCode Go accounts
@@ -69,13 +69,13 @@ Available Commands:
 
 Flags:
   -n, --account string   specify account
-  -h, --help             help for opencode-usage
+  -h, --help             help for token-usage
   -j, --json             JSON output
       --no-color         disable color output
   -o, --output string    output to file
-  -v, --version          version for opencode-usage
+  -v, --version          version for token-usage
 
-Use "opencode-usage [command] --help" for more information about a command.
+Use "token-usage [command] --help" for more information about a command.
 ```
 
 ### Findings
@@ -84,15 +84,15 @@ Use "opencode-usage [command] --help" for more information about a command.
 |---|-------|----------|--------|
 | 1 | Clean Cobra-generated help | **PASS** | Standard formatting, well-aligned columns, readable. |
 | 2 | Max line = 99 cols (description) | **PASS** | Cobra wraps long descriptions automatically; no issue on 80-col. |
-| 3 | Alias documented | **PASS** | `ou` alias is shown. |
+| 3 | Alias documented | **PASS** | `tu` alias is shown. |
 | 4 | Global flags listed | **PASS** | `-j`, `--no-color`, `-o` all visible. |
 
 ---
 
-## Command 3: `opencode-usage doctor`
+## Command 3: `token-usage doctor`
 
 ```
-  [OK] Config file          /home/tjk/.config/opencode-usage/config.yaml
+  [OK] Config file          /home/tjk/.config/token-usage/config.yaml
   [OK] Accounts             3 configured
   [!!] Keyring              using encrypted file fallback
   [OK] Network              opencode.ai reachable
@@ -112,13 +112,13 @@ Use "opencode-usage [command] --help" for more information about a command.
 
 ---
 
-## Command 4: `opencode-usage account --help`
+## Command 4: `token-usage account --help`
 
 ```
 Manage OpenCode Go accounts
 
 Usage:
-  opencode-usage account [command]
+  token-usage account [command]
 
 Aliases:
   account, a
@@ -139,7 +139,7 @@ Global Flags:
       --no-color         disable color output
   -o, --output string    output to file
 
-Use "opencode-usage account [command] --help" for more information about a command.
+Use "token-usage account [command] --help" for more information about a command.
 ```
 
 ### Findings
@@ -150,7 +150,7 @@ Use "opencode-usage account [command] --help" for more information about a comma
 
 ---
 
-## Command 5: `opencode-usage account list`
+## Command 5: `token-usage account list`
 
 ```
     emmmmdty@gmail.com    Key: sk-...ndpAfD  Status: ok          Last verified: 2 hours ago
@@ -169,7 +169,7 @@ Use "opencode-usage account [command] --help" for more information about a comma
 
 ---
 
-## Command 6: `opencode-usage --json | head -30`
+## Command 6: `token-usage --json | head -30`
 
 ```json
 {

@@ -1,4 +1,4 @@
-# UX/Product Refresh Plan — opencode-usage v0.2.0
+# UX/Product Refresh Plan — token-usage v0.2.0
 
 ## Current State
 
@@ -31,7 +31,7 @@
 
 ### P0 — This Release
 
-1. **Default `ou` → quota dashboard**
+1. **Default `tu` → quota dashboard**
    - Refactor quota logic into shared function
    - Root command runs quota overview when no subcommand given
 
@@ -58,7 +58,7 @@
 9. **Remove duplicate aliases** — Clean up root-level alias commands
 10. **Fix account list alignment** — Use runewidth for all columns
 11. **JSON schema versioning** — Wrap output in `{"version": "1", "accounts": [...]}`
-12. **Doctor command** — `ou doctor` checks config, keyring, network, API
+12. **Doctor command** — `tu doctor` checks config, keyring, network, API
 
 ### NOT in this release
 - Watch mode, cache, account switching, health status, best-account recommendation
@@ -82,10 +82,10 @@
 
 ## Success Criteria
 
-1. `ou` shows a useful quota dashboard (not help)
+1. `tu` shows a useful quota dashboard (not help)
 2. CJK account names display correctly in all tables
-3. `NO_COLOR=1 ou q` produces clean output
-4. `ou q | cat` produces clean output (no ANSI)
+3. `NO_COLOR=1 tu q` produces clean output
+4. `tu q | cat` produces clean output (no ANSI)
 5. Active account is clearly marked
 6. Progress bars are scannable at a glance
 7. Error rows are visually distinct

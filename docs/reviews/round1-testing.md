@@ -256,8 +256,8 @@ accounts:
 - **Suggested Test**:
 ```go
 func TestStoreEncryptedAccountNameWithColon(t *testing.T) {
-    if os.Getenv("OPENCODE_USAGE_MASTER_PASSWORD") == "" {
-        t.Skip("OPENCODE_USAGE_MASTER_PASSWORD not set")
+    if os.Getenv("TOKEN_USAGE_MASTER_PASSWORD") == "" {
+        t.Skip("TOKEN_USAGE_MASTER_PASSWORD not set")
     }
     account := "prod:us"
     apiKey := "sk-test-colon-123456"
@@ -290,8 +290,8 @@ func TestStoreEncryptedAccountNameWithColon(t *testing.T) {
 - **Suggested Test**:
 ```go
 func TestEncryptedConcurrentAccess(t *testing.T) {
-    if os.Getenv("OPENCODE_USAGE_MASTER_PASSWORD") == "" {
-        t.Skip("OPENCODE_USAGE_MASTER_PASSWORD not set")
+    if os.Getenv("TOKEN_USAGE_MASTER_PASSWORD") == "" {
+        t.Skip("TOKEN_USAGE_MASTER_PASSWORD not set")
     }
     path, _ := getEncryptedPath()
     os.Remove(path)
@@ -327,7 +327,7 @@ func TestEncryptedConcurrentAccess(t *testing.T) {
 ### [T-007] Keyring test skipped in most CI environments
 - **Severity**: MAJOR
 - **File(s)**: `internal/auth/credential_test.go`
-- **Description**: `TestKeyringOperations` skips entirely when keyring is unavailable AND `OPENCODE_USAGE_MASTER_PASSWORD` isn't set. On most CI systems and containers, neither is available, so the only test for `StoreAPIKey`/`GetAPIKey`/`DeleteAPIKey` is never executed. This is the most critical storage path.
+- **Description**: `TestKeyringOperations` skips entirely when keyring is unavailable AND `TOKEN_USAGE_MASTER_PASSWORD` isn't set. On most CI systems and containers, neither is available, so the only test for `StoreAPIKey`/`GetAPIKey`/`DeleteAPIKey` is never executed. This is the most critical storage path.
 - **Test Gap**: Either mock the keyring interface or use `SetUseMasterPassword(false)` to force encrypted file path. Test the encrypted fallback path directly.
 - **Suggested Test**:
 ```go
@@ -348,11 +348,11 @@ func TestCredentialStoreFallbackPath(t *testing.T) {
     account := "test-fallback"
     apiKey := "sk-fallback-test"
 
-    if err := StoreAPIKey("opencode-usage", account, apiKey); err != nil {
+    if err := StoreAPIKey("token-usage", account, apiKey); err != nil {
         t.Fatalf("StoreAPIKey failed: %v", err)
     }
 
-    got, err := GetAPIKey("opencode-usage", account)
+    got, err := GetAPIKey("token-usage", account)
     if err != nil {
         t.Fatalf("GetAPIKey failed: %v", err)
     }
@@ -397,8 +397,8 @@ func TestExtractKeyIDEdgeCases(t *testing.T) {
 ### [T-009] Validator env var fallback path not actually tested
 - **Severity**: MAJOR
 - **File(s)**: `internal/auth/validator_test.go:89-102`
-- **Description**: `TestValidateAPIKeyDefaultBaseURL` calls `ValidateAPIKey("test-key", "")` and only checks that a response is returned. It doesn't set `OPENCODE_USAGE_BASE_URL` env var, so it only tests the default URL fallback (which hits the real network and gets a connection error). The env var path is never tested.
-- **Test Gap**: Set `OPENCODE_USAGE_BASE_URL` env var to a test server and verify requests go there.
+- **Description**: `TestValidateAPIKeyDefaultBaseURL` calls `ValidateAPIKey("test-key", "")` and only checks that a response is returned. It doesn't set `TOKEN_USAGE_BASE_URL` env var, so it only tests the default URL fallback (which hits the real network and gets a connection error). The env var path is never tested.
+- **Test Gap**: Set `TOKEN_USAGE_BASE_URL` env var to a test server and verify requests go there.
 - **Suggested Test**:
 ```go
 func TestValidateAPIKeyEnvBaseURL(t *testing.T) {
@@ -410,8 +410,8 @@ func TestValidateAPIKeyEnvBaseURL(t *testing.T) {
     }))
     defer server.Close()
 
-    os.Setenv("OPENCODE_USAGE_BASE_URL", server.URL)
-    defer os.Unsetenv("OPENCODE_USAGE_BASE_URL")
+    os.Setenv("TOKEN_USAGE_BASE_URL", server.URL)
+    defer os.Unsetenv("TOKEN_USAGE_BASE_URL")
 
     resp, err := ValidateAPIKey("test-key", "")
     if err != nil {
@@ -460,7 +460,7 @@ func TestRunQuotaOverviewJSON(t *testing.T) {
     defer os.Unsetenv("HOME")
 
     // Create config with one account
-    configDir := filepath.Join(tmpHome, ".config", "opencode-usage")
+    configDir := filepath.Join(tmpHome, ".config", "token-usage")
     os.MkdirAll(configDir, 0700)
     cfg := `version: "1"
 accounts:
@@ -499,11 +499,11 @@ accounts:
 ```go
 func TestAliasExists(t *testing.T) {
     tmpFile := filepath.Join(t.TempDir(), ".bashrc")
-    content := "# some comment\nalias ll='ls -la'\n# opencode-usage alias\nalias ou='opencode-usage'\n"
+    content := "# some comment\nalias ll='ls -la'\n# token-usage alias\nalias tu='token-usage'\n"
     os.WriteFile(tmpFile, []byte(content), 0644)
 
-    if !aliasExists(tmpFile, "ou") {
-        t.Error("expected alias 'ou' to exist")
+    if !aliasExists(tmpFile, "tu") {
+        t.Error("expected alias 'tu' to exist")
     }
     if aliasExists(tmpFile, "nonexistent") {
         t.Error("expected alias 'nonexistent' to not exist")
@@ -512,18 +512,18 @@ func TestAliasExists(t *testing.T) {
 
 func TestRemoveAliasPreservesOtherContent(t *testing.T) {
     tmpFile := filepath.Join(t.TempDir(), ".bashrc")
-    content := "# some comment\nalias ll='ls -la'\n# opencode-usage alias\nalias ou='opencode-usage'\n# another alias\nalias gp='git push'\n"
+    content := "# some comment\nalias ll='ls -la'\n# token-usage alias\nalias tu='token-usage'\n# another alias\nalias gp='git push'\n"
     os.WriteFile(tmpFile, []byte(content), 0644)
 
-    if err := removeAlias(tmpFile, "ou"); err != nil {
+    if err := removeAlias(tmpFile, "tu"); err != nil {
         t.Fatalf("removeAlias failed: %v", err)
     }
 
     result, _ := os.ReadFile(tmpFile)
     resultStr := string(result)
 
-    if strings.Contains(resultStr, "alias ou=") {
-        t.Error("alias 'ou' should have been removed")
+    if strings.Contains(resultStr, "alias tu=") {
+        t.Error("alias 'tu' should have been removed")
     }
     if !strings.Contains(resultStr, "alias ll=") {
         t.Error("alias 'll' should be preserved")
@@ -531,8 +531,8 @@ func TestRemoveAliasPreservesOtherContent(t *testing.T) {
     if !strings.Contains(resultStr, "alias gp=") {
         t.Error("alias 'gp' should be preserved")
     }
-    // The comment "# opencode-usage alias" should also be removed
-    if strings.Contains(resultStr, "opencode-usage alias") {
+    // The comment "# token-usage alias" should also be removed
+    if strings.Contains(resultStr, "token-usage alias") {
         t.Error("associated comment should have been removed")
     }
 }
@@ -648,8 +648,8 @@ func TestCLIVersion(t *testing.T) {
     if err != nil {
         t.Fatalf("version command failed: %v", err)
     }
-    if !strings.Contains(string(output), "opencode-usage") {
-        t.Errorf("expected 'opencode-usage' in version output, got: %s", output)
+    if !strings.Contains(string(output), "token-usage") {
+        t.Errorf("expected 'token-usage' in version output, got: %s", output)
     }
 }
 
@@ -657,7 +657,7 @@ func TestCLINoAccountsJSON(t *testing.T) {
     tmpHome := t.TempDir()
     binary := buildBinary(t)
 
-    configDir := filepath.Join(tmpHome, ".config", "opencode-usage")
+    configDir := filepath.Join(tmpHome, ".config", "token-usage")
     os.MkdirAll(configDir, 0700)
     os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(`version: "1"\naccounts: {}`), 0600)
 

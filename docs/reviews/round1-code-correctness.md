@@ -12,7 +12,7 @@
 - **Severity**: MAJOR
 - **File**: `internal/auth/encrypted.go:78-88`
 - **Description**: `getMasterPassword()` reads and writes `cachedMasterPassword` (a package-level `string`) without synchronization. When `useMasterPassword` is not nil and `*useMasterPassword == false`, the function takes the early-return path (line 83) that writes `cachedMasterPassword = defaultPassword` without going through `passwordOnce.Do()`. If two goroutines call `getMasterPassword()` concurrently (which happens in `quota.go` line 100 when multiple accounts are queried), both can enter this path simultaneously, creating a data race on the global string variable.
-- **Impact**: Undefined behavior per Go memory model. On amd64 the string pointer+length pair may be torn, causing one goroutine to read a partially-written string. In practice the value is always `"opencode-usage-default"` so the corruption window is small, but the race detector will flag this and it violates Go's memory safety guarantees.
+- **Impact**: Undefined behavior per Go memory model. On amd64 the string pointer+length pair may be torn, causing one goroutine to read a partially-written string. In practice the value is always `"token-usage-default"` so the corruption window is small, but the race detector will flag this and it violates Go's memory safety guarantees.
 - **Reproduction**: Run `go test -race ./internal/auth/` with `useMasterPassword` set to `false` and multiple concurrent callers of `GetAPIKey`.
 - **Suggested Fix**: Protect the entire `getMasterPassword` function body with a `sync.Once` or `sync.RWMutex`, or restructure so the `useMasterPassword == false` path also goes through `passwordOnce.Do`.
 
@@ -23,7 +23,7 @@
 - **File**: `internal/cmd/account.go:77-91`
 - **Description**: `accountAddCmd.RunE` stores the API key in the keyring/encrypted file (line 77) *before* saving the config (line 88). If `config.SaveConfig` fails (e.g., disk full, permissions error), the key is stored but the config file doesn't reflect the new account. On next run, the account is invisible but the key persists as an orphan in the keyring.
 - **Impact**: Data inconsistency. The user sees no error about the account being added (since the command returned an error), but the key is permanently stored. Subsequent `account add` with the same name fails with "already exists" because the config check passes, but the key is already in the keyring.
-- **Reproduction**: Make the config directory read-only after the keyring store succeeds (e.g., `chmod 555 ~/.config/opencode-usage/`) and run `account add`.
+- **Reproduction**: Make the config directory read-only after the keyring store succeeds (e.g., `chmod 555 ~/.config/token-usage/`) and run `account add`.
 - **Suggested Fix**: Validate config save *before* storing the key, or add a cleanup step that removes the key if config save fails.
 
 ---
@@ -81,20 +81,20 @@
 ### [CC-08] Alias removal doesn't handle alternative shell alias syntax
 - **Severity**: MINOR
 - **File**: `internal/cmd/alias.go:99-115`, `internal/cmd/alias.go:130-142`
-- **Description**: `aliasExists` checks for `alias ou=` in a line. Shell aliases can also be written as `alias ou 'command'` (without `=`). A user with this syntax won't have their alias detected or removed.
+- **Description**: `aliasExists` checks for `alias tu=` in a line. Shell aliases can also be written as `alias tu 'command'` (without `=`). A user with this syntax won't have their alias detected or removed.
 - **Impact**: `alias install` adds a duplicate alias. `alias uninstall` fails to find and remove the existing alias.
-- **Reproduction**: Add `alias ou 'opencode-usage'` to `.bashrc`. Run `alias install`. A duplicate is added. Run `alias uninstall`. The original alias is not removed.
-- **Suggested Fix**: Match on `alias ou` followed by either `=` or whitespace, and use a more flexible regex or split-based matching.
+- **Reproduction**: Add `alias tu 'token-usage'` to `.bashrc`. Run `alias install`. A duplicate is added. Run `alias uninstall`. The original alias is not removed.
+- **Suggested Fix**: Match on `alias tu` followed by either `=` or whitespace, and use a more flexible regex or split-based matching.
 
 ---
 
 ### [CC-09] Alias removal matches commented-out aliases
 - **Severity**: MINOR
 - **File**: `internal/cmd/alias.go:130-142`
-- **Description**: `removeAlias` uses `strings.Contains(line, aliasLine)` which matches the pattern anywhere in the line. A commented-out line like `# alias ou=old-command` would be removed.
+- **Description**: `removeAlias` uses `strings.Contains(line, aliasLine)` which matches the pattern anywhere in the line. A commented-out line like `# alias tu=old-command` would be removed.
 - **Impact**: Commented-out alias lines are silently deleted.
-- **Reproduction**: Add `# alias ou=old-version` as a comment in `.bashrc`. Run `alias uninstall`. The comment line is removed.
-- **Suggested Fix**: Trim the line and check if it starts with `alias ou=` (not preceded by `#`).
+- **Reproduction**: Add `# alias tu=old-version` as a comment in `.bashrc`. Run `alias uninstall`. The comment line is removed.
+- **Suggested Fix**: Trim the line and check if it starts with `alias tu=` (not preceded by `#`).
 
 ---
 
@@ -112,8 +112,8 @@
 - **Severity**: MINOR
 - **File**: `internal/cmd/account.go:135-158`
 - **Description**: `accountListCmd.RunE` uses `fmt.Printf` directly instead of `writeOutput`. The global `-o` flag is silently ignored for this command, while it works for `quota` and `models`.
-- **Impact**: User expects `ou account list -o out.txt` to write to file; it doesn't.
-- **Reproduction**: Run `ou account list -o /tmp/test.txt`. The output goes to stdout, not the file.
+- **Impact**: User expects `tu account list -o out.txt` to write to file; it doesn't.
+- **Reproduction**: Run `tu account list -o /tmp/test.txt`. The output goes to stdout, not the file.
 - **Suggested Fix**: Use `writeOutput` in `accountListCmd` for consistency.
 
 ---

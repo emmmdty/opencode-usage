@@ -1,4 +1,4 @@
-# opencode-usage
+# token-usage
 
 Multi-provider AI coding tool usage monitor — query usage, available models, and quota information across OpenCode, Claude, Codex, and Volcengine.
 
@@ -11,7 +11,7 @@ Multi-provider AI coding tool usage monitor — query usage, available models, a
 - **Model listing** — See available models for your plan
 - **Current config** — Display the active configuration with provider details
 - **Diagnostics** — Run `doctor` to check configuration and connectivity
-- **Shell aliases** — Install/uninstall the `ou` shortcut
+- **Shell aliases** — Install/uninstall the `tu` shortcut
 - **JSON output** — Machine-readable output with `--json`
 - **Secure storage** — API keys stored in system keyring, with fallback to encrypted config
 - **Concurrent queries** — Parallel quota fetching with configurable concurrency
@@ -30,37 +30,37 @@ Multi-provider AI coding tool usage monitor — query usage, available models, a
 ### Go install
 
 ```bash
-go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@latest
+go install github.com/emmmdty/token-usage/cmd/token-usage@latest
 ```
 
 Requires Go 1.26.6+. If `~/go/bin` is not in your PATH, use:
 
 ```bash
-GOBIN=~/.local/bin go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@latest
+GOBIN=~/.local/bin go install github.com/emmmdty/token-usage/cmd/token-usage@latest
 ```
 
 ### Download binary
 
-Download the latest release from [GitHub Releases](https://github.com/emmmdty/opencode-usage/releases).
+Download the latest release from [GitHub Releases](https://github.com/emmmdty/token-usage/releases).
 
 Available for Linux, macOS, and Windows (amd64/arm64).
 
 ### Build from source
 
 ```bash
-git clone https://github.com/emmmdty/opencode-usage.git
-cd opencode-usage
-go build -o opencode-usage ./cmd/opencode-usage/
+git clone https://github.com/emmmdty/token-usage.git
+cd token-usage
+go build -o token-usage ./cmd/token-usage/
 ```
 
 ## Quick start
 
 ```bash
 # Just run it — shows usage across all configured providers
-opencode-usage providers
+token-usage providers
 
 # Or use the alias
-ou
+tu
 ```
 
 ## Usage
@@ -69,73 +69,73 @@ ou
 
 ```bash
 # View usage across all providers
-opencode-usage providers
+token-usage providers
 
 # JSON output
-opencode-usage providers --json
+token-usage providers --json
 ```
 
 ### Account management (OpenCode)
 
 ```bash
 # Add an account (interactive prompt)
-opencode-usage account add
+token-usage account add
 
 # List all accounts (-> marks the current one)
-opencode-usage account list
+token-usage account list
 
 # Switch active account (interactive menu)
-opencode-usage account switch
+token-usage account switch
 
 # Export accounts (names + key IDs only, no secrets)
-opencode-usage account export
+token-usage account export
 
 # Import accounts from file
-opencode-usage account import accounts.json
+token-usage account import accounts.json
 ```
 
 ### Quota (legacy OpenCode view)
 
 ```bash
 # View quota for all accounts
-opencode-usage quota
+token-usage quota
 
 # View quota for a specific account
-opencode-usage quota -n work
+token-usage quota -n work
 
 # JSON output
-opencode-usage quota --json
+token-usage quota --json
 ```
 
 ### Models
 
 ```bash
 # List available models
-opencode-usage models
+token-usage models
 ```
 
 ### Diagnostics
 
 ```bash
 # Check configuration and connectivity
-opencode-usage doctor
+token-usage doctor
 ```
 
 ### Shell alias
 
 ```bash
-# Install the 'ou' alias
-opencode-usage alias install
+# Install the 'tu' alias
+token-usage alias install
 
-# Uninstall the 'ou' alias
-opencode-usage alias uninstall
+# Uninstall the 'tu' alias
+token-usage alias uninstall
 ```
 
 ### Version & updates
 
 ```bash
-opencode-usage version
-opencode-usage update
+token-usage version
+token-usage update
 ```
 
 ## Short aliases
@@ -153,7 +153,7 @@ opencode-usage update
 | `quota` | `q` |
 | `models` | `m` |
 | `current` | `cc` |
-| `opencode-usage` | `ou` (shell alias) |
+| `token-usage` | `tu` (shell alias) |
 
 ## Global flags
 
@@ -166,7 +166,7 @@ opencode-usage update
 
 ## Configuration
 
-Config file: `~/.config/opencode-usage/config.yaml`
+Config file: `~/.config/token-usage/config.yaml`
 
 ```yaml
 version: "2"
@@ -244,8 +244,8 @@ providers:
 | Variable | Description |
 |----------|-------------|
 | `NO_COLOR` | Disable color output (see [no-color.org](https://no-color.org)) |
-| `OPENCODE_USAGE_MASTER_PASSWORD` | Master password for encrypted storage |
-| `OPENCODE_USAGE_KEYRING_PASSWORD` | Password for keyring file backend |
+| `TOKEN_USAGE_MASTER_PASSWORD` | Master password for encrypted storage |
+| `TOKEN_USAGE_KEYRING_PASSWORD` | Password for keyring file backend |
 
 ## Security
 

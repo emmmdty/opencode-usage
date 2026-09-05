@@ -3,7 +3,7 @@
 **Reviewer:** H — Fresh Behavior/Test Audit  
 **Date:** 2026-08-26  
 **Scope:** Runtime behavior, test coverage, correctness of logic  
-**Codebase:** `/home/tjk/myProjects/tools/opencode-usage`
+**Codebase:** `/home/tjk/myProjects/tools/token-usage`
 
 ---
 
@@ -21,15 +21,15 @@
 
 | Command | Result | Notes |
 |---|---|---|
-| `./opencode-usage --help` | PASS | Shows all commands, flags, aliases (`ou`) |
-| `./opencode-usage version` | PASS | Prints `opencode-usage 0.2.0 (commit: none, built: unknown)` |
-| `./opencode-usage quota --help` | PASS | Correct subcommand help |
-| `./opencode-usage account --help` | PASS | Shows add/list/remove/export/import subcommands |
-| `./opencode-usage doctor --help` | PASS | Correct subcommand help |
-| `./opencode-usage models --help` | PASS | Correct subcommand help |
-| `NO_COLOR=1 ./opencode-usage quota --help` | PASS | Works correctly |
-| `./opencode-usage --no-color quota --help` | PASS | Flag-based color disable works |
-| `./opencode-usage --json quota` (no valid keys) | PASS | Returns valid JSON with `version:"1"` and `accounts` array |
+| `./token-usage --help` | PASS | Shows all commands, flags, aliases (`tu`) |
+| `./token-usage version` | PASS | Prints `token-usage 0.2.0 (commit: none, built: unknown)` |
+| `./token-usage quota --help` | PASS | Correct subcommand help |
+| `./token-usage account --help` | PASS | Shows add/list/remove/export/import subcommands |
+| `./token-usage doctor --help` | PASS | Correct subcommand help |
+| `./token-usage models --help` | PASS | Correct subcommand help |
+| `NO_COLOR=1 ./token-usage quota --help` | PASS | Works correctly |
+| `./token-usage --no-color quota --help` | PASS | Flag-based color disable works |
+| `./token-usage --json quota` (no valid keys) | PASS | Returns valid JSON with `version:"1"` and `accounts` array |
 
 ---
 
@@ -38,7 +38,7 @@
 **Severity:** Low  
 **Verdict:** BUG  
 
-Running `./opencode-usage quota -n nonexistent-account` outputs:
+Running `./token-usage quota -n nonexistent-account` outputs:
 
 ```
 Error: account 'nonexistent-account' not found
@@ -119,7 +119,7 @@ No test files exist for:
 - `internal/cmd/` — all command logic (quota, account, doctor, models, alias, current, root)
 - `internal/models/` — data models
 - `internal/version/` — version info
-- `cmd/opencode-usage/` — main entry point (expected, but worth noting)
+- `cmd/token-usage/` — main entry point (expected, but worth noting)
 
 The `cmd` package contains significant logic: `runQuotaOverview`, `resolveCurrentAccount`, `printQuotaTable`, `getAPIKeyForCommand`, `formatRelativeTime`, `aliasExists`, `removeAlias`. None of this is unit-tested. The `TestCLIIntegration` in `test/integration_test.go` only tests `--help` output.
 

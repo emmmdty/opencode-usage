@@ -16,7 +16,7 @@ var (
 )
 
 func GetVersionInfo() string {
-	return fmt.Sprintf("opencode-usage %s (commit: %s, built: %s)", Version, Commit, Date)
+	return fmt.Sprintf("token-usage %s (commit: %s, built: %s)", Version, Commit, Date)
 }
 
 // init falls back to module build info when ldflags were not injected.

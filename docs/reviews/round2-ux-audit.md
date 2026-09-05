@@ -174,8 +174,8 @@ Correctly handles singular/plural for the total count. Sub-counts ("1 healthy", 
 
 **Verified output:**
 ```
-$ opencode-usage doctor --no-color
-  [OK] Config file          /home/tjk/.config/opencode-usage/config.yaml
+$ token-usage doctor --no-color
+  [OK] Config file          /home/tjk/.config/token-usage/config.yaml
   [OK] Accounts             3 configured
   [!!] Keyring              using encrypted file fallback
   [OK] Network              opencode.ai reachable

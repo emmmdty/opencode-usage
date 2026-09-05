@@ -1,7 +1,7 @@
 package manager
 
 import (
-	"github.com/emmmdty/opencode-usage/internal/provider"
+	"github.com/emmmdty/token-usage/internal/provider"
 )
 
 // Manager 管理多个 provider

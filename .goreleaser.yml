@@ -1,13 +1,13 @@
 version: 2
 
 builds:
-  - binary: opencode-usage
-    main: ./cmd/opencode-usage
+  - binary: token-usage
+    main: ./cmd/token-usage
     ldflags:
       - -s -w
-      - -X github.com/emmmdty/opencode-usage/internal/version.Version={{.Version}}
-      - -X github.com/emmmdty/opencode-usage/internal/version.Commit={{.ShortCommit}}
-      - -X github.com/emmmdty/opencode-usage/internal/version.Date={{.Date}}
+      - -X github.com/emmmdty/token-usage/internal/version.Version={{.Version}}
+      - -X github.com/emmmdty/token-usage/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/emmmdty/token-usage/internal/version.Date={{.Date}}
     goos:
       - linux
       - darwin
@@ -23,7 +23,7 @@ archives:
     format_overrides:
       - goos: windows
         formats: [zip]
-  # Raw binaries: `ou update` downloads these directly (no unpack step).
+  # Raw binaries: `tu update` downloads these directly (no unpack step).
   # goreleaser preserves the .exe extension for Windows binaries automatically.
   - id: binaries
     formats: [binary]

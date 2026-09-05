@@ -3,7 +3,7 @@
 **Reviewer:** Reviewer I — Fresh Docs Consistency Audit  
 **Date:** 2026-08-26  
 **Scope:** README.md vs code behavior, help output, config, env vars, tests  
-**Binary built:** `go build ./cmd/opencode-usage/` — succeeds  
+**Binary built:** `go build ./cmd/token-usage/` — succeeds  
 **Tests:** `go test ./...` — all pass  
 
 ---
@@ -12,7 +12,7 @@
 
 | Feature | README Says | Help Says | Code Implements | Test Covers | Runtime Verified |
 |---------|------------|-----------|-----------------|-------------|------------------|
-| Root command (quota dashboard) | Default action shows quota dashboard | `RunE: runQuotaOverview(...)` | `internal/cmd/root.go:40` | `quota_test.go` (TUI formatting) | Yes — running `opencode-usage` with no args invokes quota |
+| Root command (quota dashboard) | Default action shows quota dashboard | `RunE: runQuotaOverview(...)` | `internal/cmd/root.go:40` | `quota_test.go` (TUI formatting) | Yes — running `token-usage` with no args invokes quota |
 | `account` | Documented with add/list/remove/export/import | `account` alias `a` | `internal/cmd/account.go` | No dedicated cmd tests | Yes |
 | `account add` | Interactive prompt | `add` alias `aa` | `internal/cmd/account.go:26` | No cmd test | Yes |
 | `account list` | Lists accounts | `list` alias `al` | `internal/cmd/account.go:101` | No cmd test | Yes |
@@ -27,8 +27,8 @@
 | `models` | List available models | `models` alias `m` | `internal/cmd/models.go:14` | No cmd test | Yes |
 | `current` | Show active opencode configuration | `current` alias `cc` | `internal/cmd/current.go:17` | No cmd test | Yes |
 | `doctor` | Check configuration and connectivity | `doctor` | `internal/cmd/doctor.go:14` | No cmd test | Yes |
-| `alias install` | Install `ou` shell alias | `alias install` | `internal/cmd/alias.go:17` | No cmd test | Yes |
-| `alias uninstall` | Uninstall `ou` shell alias | `alias uninstall` | `internal/cmd/alias.go:67` | No cmd test | Yes |
+| `alias install` | Install `tu` shell alias | `alias install` | `internal/cmd/alias.go:17` | No cmd test | Yes |
+| `alias uninstall` | Uninstall `tu` shell alias | `alias uninstall` | `internal/cmd/alias.go:67` | No cmd test | Yes |
 | `version` | Show version information | `version` | `internal/cmd/root.go:58` | No cmd test | Yes |
 | `update` | Check for new releases | `update` | `internal/cmd/root.go:66` | No cmd test | Yes |
 | `completion` | **NOT documented** | `completion` (cobra auto-gen) | Cobra built-in | No | Yes |
@@ -36,7 +36,7 @@
 | `--account` / `-n` | Documented as global flag | `-n, --account` | `root.go:79` | No | Yes |
 | `--output` / `-o` | Documented as global flag | `-o, --output` | `root.go:80` | No | Yes |
 | `--no-color` | Documented as global flag | `--no-color` | `root.go:81` | No | Yes |
-| `ou` shell alias | Documented in aliases table | `root.go` `Aliases: []string{"ou"}` | Yes | No | Yes |
+| `tu` shell alias | Documented in aliases table | `root.go` `Aliases: []string{"tu"}` | Yes | No | Yes |
 | Short aliases (a, aa, al, ar, ae, ai, q, m, cc) | All documented in aliases table | All present in `--help` | All in code | No | Yes |
 
 ---
@@ -61,8 +61,8 @@
 
 | | Value |
 |---|---|
-| README says | `~/.config/opencode-usage/config.yaml` |
-| Code (`getConfigPath()`) | `homeDir + "/.config/opencode-usage/config.yaml"` |
+| README says | `~/.config/token-usage/config.yaml` |
+| Code (`getConfigPath()`) | `homeDir + "/.config/token-usage/config.yaml"` |
 
 ### F4 — Config Defaults: Match (OK)
 
@@ -80,9 +80,9 @@ Note: `use_master_password` in code is `*bool` with `omitempty`, so a fresh conf
 | Variable | README | Code Location |
 |----------|--------|---------------|
 | `NO_COLOR` | Documented | `root.go:31`, `doctor.go:100`, `tui/theme.go:17` |
-| `OPENCODE_USAGE_MASTER_PASSWORD` | Documented | `auth/encrypted.go:56` |
-| `OPENCODE_USAGE_KEYRING_PASSWORD` | Documented | `auth/credential.go:22` |
-| `OPENCODE_USAGE_BASE_URL` | Documented | `auth/validator.go:23` |
+| `TOKEN_USAGE_MASTER_PASSWORD` | Documented | `auth/encrypted.go:56` |
+| `TOKEN_USAGE_KEYRING_PASSWORD` | Documented | `auth/credential.go:22` |
+| `TOKEN_USAGE_BASE_URL` | Documented | `auth/validator.go:23` |
 
 ### F6 — Exit Codes: Partially Documented (MINOR)
 
@@ -97,15 +97,15 @@ README correctly captures the behavior. The code only ever exits 0 or 1 (single 
 
 | | Value |
 |---|---|
-| go.mod | `github.com/emmmdty/opencode-usage` |
-| README install | `go install github.com/emmmdty/opencode-usage/cmd/opencode-usage@latest` |
+| go.mod | `github.com/emmmdty/token-usage` |
+| README install | `go install github.com/emmmdty/token-usage/cmd/token-usage@latest` |
 
-These match. The `cmd/opencode-usage/` subdirectory is correct per the directory structure.
+These match. The `cmd/token-usage/` subdirectory is correct per the directory structure.
 
 ### F8 — Installation Instructions: Match (OK)
 
 - `go install` path matches module path + binary entry point
-- `go build -o opencode-usage ./cmd/opencode-usage/` matches directory structure
+- `go build -o token-usage ./cmd/token-usage/` matches directory structure
 - Binary builds successfully with Go 1.26.6
 
 ### F9 — `account export` Security Claim: Accurate (OK)
@@ -131,18 +131,18 @@ All 10 aliases listed in README match the code:
 | `quota` → `q` | `Aliases: []string{"q"}` | `quota.go:34` |
 | `models` → `m` | `Aliases: []string{"m"}` | `models.go:16` |
 | `current` → `cc` | `Aliases: []string{"cc"}` | `current.go:19` |
-| `opencode-usage` → `ou` | `Aliases: []string{"ou"}` | `root.go:26` |
+| `token-usage` → `tu` | `Aliases: []string{"tu"}` | `root.go:26` |
 
 ### F12 — Build from Source Path: Match (OK)
 
-README: `go build -o opencode-usage ./cmd/opencode-usage/`  
-Actual path: `cmd/opencode-usage/main.go` — correct.
+README: `go build -o token-usage ./cmd/token-usage/`  
+Actual path: `cmd/token-usage/main.go` — correct.
 
 ### F13 — Version Output: Consistent (OK)
 
 - `internal/version/version.go`: `Version = "0.2.0"`
 - `--help` shows version from `rootCmd.Version: version.Version` → `0.2.0`
-- `version` command output: `opencode-usage 0.2.0 (commit: none, built: unknown)` — correct
+- `version` command output: `token-usage 0.2.0 (commit: none, built: unknown)` — correct
 
 ### F14 — Goreleaser Platforms: Match (OK)
 

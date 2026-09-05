@@ -8,11 +8,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/emmmdty/opencode-usage/internal/auth"
-	"github.com/emmmdty/opencode-usage/internal/client"
-	"github.com/emmmdty/opencode-usage/internal/config"
-	"github.com/emmmdty/opencode-usage/internal/models"
-	"github.com/emmmdty/opencode-usage/internal/tui"
+	"github.com/emmmdty/token-usage/internal/auth"
+	"github.com/emmmdty/token-usage/internal/client"
+	"github.com/emmmdty/token-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/models"
+	"github.com/emmmdty/token-usage/internal/tui"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -66,7 +66,7 @@ func runQuotaOverview(accountFilter string, jsonOut bool, outPath string) error 
 			resp := quotaResponse{Version: "1", Accounts: []accountResult{}}
 			return printJSON(resp)
 		}
-		return writeOutput("  No accounts configured. Run 'opencode-usage account add' to get started.\n")
+		return writeOutput("  No accounts configured. Run 'token-usage account add' to get started.\n")
 	}
 
 	currentAccount := resolveCurrentAccount(cfg)
@@ -94,7 +94,7 @@ func runQuotaOverview(accountFilter string, jsonOut bool, outPath string) error 
 	}
 	creds := make([]credResult, 0, len(accountsToQuery))
 	for name := range accountsToQuery {
-		apiKey, err := auth.GetAPIKey("opencode-usage", name)
+		apiKey, err := auth.GetAPIKey("token-usage", name)
 		creds = append(creds, credResult{name: name, apiKey: apiKey, credErr: err})
 	}
 

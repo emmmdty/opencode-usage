@@ -1,4 +1,4 @@
-# opencode-usage 实现计划
+# token-usage 实现计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -17,14 +17,14 @@
 **Files:**
 - Create: `go.mod`
 - Create: `go.sum`
-- Create: `cmd/opencode-usage/main.go`
+- Create: `cmd/token-usage/main.go`
 - Create: `internal/models/usage.go`
 
 - [ ] **Step 1: 初始化Go模块**
 
 ```bash
-cd /home/tjk/myProjects/tools/opencode-usage
-go mod init github.com/opencode-usage
+cd /home/tjk/myProjects/tools/token-usage
+go mod init github.com/token-usage
 ```
 
 - [ ] **Step 2: 安装依赖**
@@ -102,7 +102,7 @@ type ErrorResponse struct {
 
 - [ ] **Step 4: 创建主入口文件**
 
-创建 `cmd/opencode-usage/main.go`：
+创建 `cmd/token-usage/main.go`：
 
 ```go
 package main
@@ -364,7 +364,7 @@ import (
 )
 
 func TestKeyringOperations(t *testing.T) {
-	serviceName := "opencode-usage-test"
+	serviceName := "token-usage-test"
 	accountName := "test-account"
 	apiKey := "sk-test1234567890"
 	
@@ -447,7 +447,7 @@ func init() {
 	// 尝试初始化系统密钥环
 	var err error
 	ring, err = keyring.Open(keyring.Config{
-		ServiceName: "opencode-usage",
+		ServiceName: "token-usage",
 	})
 	if err != nil {
 		fmt.Printf("Warning: system keyring unavailable, using encrypted file storage: %v\n", err)
@@ -523,7 +523,7 @@ import (
 )
 
 const (
-	encryptedDir = ".config/opencode-usage"
+	encryptedDir = ".config/token-usage"
 	encryptedFile = "secrets.enc"
 	saltSize = 16
 	keySize = 32
@@ -540,7 +540,7 @@ func getEncryptedPath() (string, error) {
 
 func getMasterPassword() (string, error) {
 	// 尝试从环境变量获取
-	if pwd := os.Getenv("OPENCODE_USAGE_MASTER_PASSWORD"); pwd != "" {
+	if pwd := os.Getenv("TOKEN_USAGE_MASTER_PASSWORD"); pwd != "" {
 		return pwd, nil
 	}
 	
@@ -806,7 +806,7 @@ type ValidationResponse struct {
 
 func ValidateAPIKey(apiKey, baseURL string) (*ValidationResponse, error) {
 	if baseURL == "" {
-		baseURL = os.Getenv("OPENCODE_USAGE_BASE_URL")
+		baseURL = os.Getenv("TOKEN_USAGE_BASE_URL")
 		if baseURL == "" {
 			baseURL = defaultBaseURL
 		}
@@ -1002,7 +1002,7 @@ import (
 	"net/http"
 	"time"
 	
-	"github.com/opencode-usage/internal/models"
+	"github.com/token-usage/internal/models"
 )
 
 type Client struct {
@@ -1138,7 +1138,7 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "opencode-usage",
+	Use:   "token-usage",
 	Short: "OpenCode Go 计划配额查询工具",
 	Long:  "用于快速查询多个OpenCode账号下Go计划的使用情况、可用模型和配额信息",
 }
@@ -1168,8 +1168,8 @@ import (
 	"time"
 	
 	"github.com/spf13/cobra"
-	"github.com/opencode-usage/internal/auth"
-	"github.com/opencode-usage/internal/config"
+	"github.com/token-usage/internal/auth"
+	"github.com/token-usage/internal/config"
 )
 
 var accountCmd = &cobra.Command{
@@ -1229,7 +1229,7 @@ var accountRemoveCmd = &cobra.Command{
 		}
 		
 		// 从密钥环删除
-		if err := auth.DeleteAPIKey("opencode-usage", accountName); err != nil {
+		if err := auth.DeleteAPIKey("token-usage", accountName); err != nil {
 			return err
 		}
 		
@@ -1255,7 +1255,7 @@ func init() {
 
 func getConfigPath() string {
 	homeDir, _ := os.UserHomeDir()
-	return homeDir + "/.config/opencode-usage/config.yaml"
+	return homeDir + "/.config/token-usage/config.yaml"
 }
 ```
 
@@ -1274,9 +1274,9 @@ import (
 	"time"
 	
 	"github.com/spf13/cobra"
-	"github.com/opencode-usage/internal/auth"
-	"github.com/opencode-usage/internal/client"
-	"github.com/opencode-usage/internal/config"
+	"github.com/token-usage/internal/auth"
+	"github.com/token-usage/internal/client"
+	"github.com/token-usage/internal/config"
 )
 
 var quotaCmd = &cobra.Command{
@@ -1302,7 +1302,7 @@ var quotaCmd = &cobra.Command{
 		}
 		
 		if len(accountsToQuery) == 0 {
-			fmt.Println("暂无配置的账号，请先运行 'opencode-usage account add' 添加账号")
+			fmt.Println("暂无配置的账号，请先运行 'token-usage account add' 添加账号")
 			return nil
 		}
 		
@@ -1319,7 +1319,7 @@ var quotaCmd = &cobra.Command{
 			go func(name string) {
 				defer wg.Done()
 				
-				apiKey, err := auth.GetAPIKey("opencode-usage", name)
+				apiKey, err := auth.GetAPIKey("token-usage", name)
 				if err != nil {
 					results <- struct {
 						name  string
@@ -1401,7 +1401,7 @@ import (
 	"fmt"
 	
 	"github.com/spf13/cobra"
-	"github.com/opencode-usage/internal/client"
+	"github.com/token-usage/internal/client"
 )
 
 var modelsCmd = &cobra.Command{
@@ -1410,9 +1410,9 @@ var modelsCmd = &cobra.Command{
 	Short:   "查看可用模型列表",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// 使用第一个账号查询模型
-		apiKey, err := auth.GetAPIKey("opencode-usage", "")
+		apiKey, err := auth.GetAPIKey("token-usage", "")
 		if err != nil {
-			return fmt.Errorf("请先添加账号: opencode-usage account add")
+			return fmt.Errorf("请先添加账号: token-usage account add")
 		}
 		
 		c := client.NewClient(apiKey, "")
@@ -1520,8 +1520,8 @@ var aliasInstallCmd = &cobra.Command{
 		}
 		
 		// 检查是否已存在别名
-		if aliasExists(rcFile, "ou") {
-			fmt.Printf("别名 'ou' 已存在于 %s\n", rcFile)
+		if aliasExists(rcFile, "tu") {
+			fmt.Printf("别名 'tu' 已存在于 %s\n", rcFile)
 			fmt.Print("是否覆盖？(y/N): ")
 			
 			reader := bufio.NewReader(os.Stdin)
@@ -1535,7 +1535,7 @@ var aliasInstallCmd = &cobra.Command{
 		}
 		
 		// 添加别名
-		alias := "\n# opencode-usage alias\nalias ou='opencode-usage'\n"
+		alias := "\n# token-usage alias\nalias tu='token-usage'\n"
 		
 		f, err := os.OpenFile(rcFile, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 		if err != nil {
@@ -1602,7 +1602,7 @@ func init() {
 
 - [ ] **Step 7: 更新主入口文件**
 
-更新 `cmd/opencode-usage/main.go`：
+更新 `cmd/token-usage/main.go`：
 
 ```go
 package main
@@ -1611,7 +1611,7 @@ import (
 	"fmt"
 	"os"
 	
-	"github.com/opencode-usage/internal/cmd"
+	"github.com/token-usage/internal/cmd"
 )
 
 func main() {
@@ -1625,7 +1625,7 @@ func main() {
 - [ ] **Step 8: 验证编译通过**
 
 ```bash
-go build ./cmd/opencode-usage/
+go build ./cmd/token-usage/
 ```
 
 Expected: BUILD SUCCESS
@@ -1633,7 +1633,7 @@ Expected: BUILD SUCCESS
 - [ ] **Step 9: 提交代码**
 
 ```bash
-git add internal/cmd/ cmd/opencode-usage/
+git add internal/cmd/ cmd/token-usage/
 git commit -m "feat: add CLI commands for account, quota, models, and alias management"
 ```
 
@@ -1661,7 +1661,7 @@ import (
 	
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/opencode-usage/internal/auth"
+	"github.com/token-usage/internal/auth"
 )
 
 type AddAccountModel struct {
@@ -1782,7 +1782,7 @@ import (
 	"time"
 	
 	"github.com/charmbracelet/lipgloss"
-	"github.com/opencode-usage/internal/models"
+	"github.com/token-usage/internal/models"
 )
 
 func FormatQuotaTable(results []AccountResult) string {
@@ -1959,14 +1959,14 @@ import (
 
 func TestCLIIntegration(t *testing.T) {
 	// 构建二进制文件
-	buildCmd := exec.Command("go", "build", "-o", "opencode-usage-test", "../cmd/opencode-usage/")
+	buildCmd := exec.Command("go", "build", "-o", "token-usage-test", "../cmd/token-usage/")
 	if err := buildCmd.Run(); err != nil {
 		t.Fatalf("failed to build binary: %v", err)
 	}
-	defer os.Remove("opencode-usage-test")
+	defer os.Remove("token-usage-test")
 	
 	// 测试帮助命令
-	helpCmd := exec.Command("./opencode-usage-test", "--help")
+	helpCmd := exec.Command("./token-usage-test", "--help")
 	output, err := helpCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to run help command: %v", err)
@@ -2012,7 +2012,7 @@ git commit -m "test: add integration tests for CLI"
 创建 `README.md`：
 
 ```markdown
-# opencode-usage
+# token-usage
 
 OpenCode Go 计划配额查询工具
 
@@ -2029,26 +2029,26 @@ OpenCode Go 计划配额查询工具
 ```bash
 # 下载预编译二进制文件
 # 或者从源码构建
-go build -o opencode-usage ./cmd/opencode-usage/
+go build -o token-usage ./cmd/token-usage/
 ```
 
 ## 使用方法
 
 ```bash
 # 添加账号
-opencode-usage account add
+token-usage account add
 
 # 查看所有账号
-opencode-usage account list
+token-usage account list
 
 # 查看配额
-opencode-usage quota
+token-usage quota
 
 # 查看特定账号配额
-opencode-usage quota -n work
+token-usage quota -n work
 
 # 安装shell别名
-opencode-usage alias install
+token-usage alias install
 ```
 
 ## 安全
@@ -2079,8 +2079,8 @@ opencode-usage alias install
 version: 2
 
 builds:
-  - binary: opencode-usage
-    main: ./cmd/opencode-usage
+  - binary: token-usage
+    main: ./cmd/token-usage
     goos:
       - linux
       - darwin
@@ -2142,7 +2142,7 @@ Expected: ALL PASS
 - [ ] **Step 2: 构建最终二进制文件**
 
 ```bash
-go build -o opencode-usage ./cmd/opencode-usage/
+go build -o token-usage ./cmd/token-usage/
 ```
 
 Expected: BUILD SUCCESS
@@ -2151,27 +2151,27 @@ Expected: BUILD SUCCESS
 
 ```bash
 # 测试帮助
-./opencode-usage --help
+./token-usage --help
 
 # 测试别名安装
-./opencode-usage alias install
+./token-usage alias install
 
 # 测试账号添加
-./opencode-usage account add
+./token-usage account add
 ```
 
 - [ ] **Step 4: 最终提交**
 
 ```bash
 git add .
-git commit -m "feat: complete opencode-usage CLI tool v0.1"
+git commit -m "feat: complete token-usage CLI tool v0.1"
 ```
 
 ---
 
 ## 执行选项
 
-**Plan complete and saved to `docs/superpowers/plans/2026-08-24-opencode-usage-implementation.md`.**
+**Plan complete and saved to `docs/superpowers/plans/2026-08-24-token-usage-implementation.md`.**
 
 **Two execution options:**
 

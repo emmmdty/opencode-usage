@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/emmmdty/opencode-usage/internal/auth"
-	"github.com/emmmdty/opencode-usage/internal/config"
+	"github.com/emmmdty/token-usage/internal/auth"
+	"github.com/emmmdty/token-usage/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -83,7 +83,7 @@ var doctorCmd = &cobra.Command{
 		if allOK {
 			fmt.Fprintln(&out, "\n  All checks passed.")
 		} else {
-			fmt.Fprintln(&out, "\n  Some checks failed. Run 'opencode-usage quota' to see details.")
+			fmt.Fprintln(&out, "\n  Some checks failed. Run 'token-usage quota' to see details.")
 		}
 		return writeOutput(out.String())
 	},

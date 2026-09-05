@@ -13,7 +13,7 @@
 - **Severity**: MAJOR
 - **Category**: Security
 - **File(s)**: `internal/auth/encrypted.go:27`
-- **Description**: The default master password `"opencode-usage-default"` is hardcoded in the source code. When `useMasterPassword` is nil or `false`, this static password is used for all encryption/decryption operations, making the encrypted secrets file trivially decryptable by anyone with access to the source code or binary.
+- **Description**: The default master password `"token-usage-default"` is hardcoded in the source code. When `useMasterPassword` is nil or `false`, this static password is used for all encryption/decryption operations, making the encrypted secrets file trivially decryptable by anyone with access to the source code or binary.
 - **Impact**: If a user does not explicitly enable master password mode, their encrypted secrets file (`secrets.enc`) is protected only by a publicly known password. An attacker with file access can decrypt all stored API keys.
 - **Suggested Fix**: Remove the default password fallback entirely. If no master password is set, either: (1) require the user to set one before storing secrets, or (2) generate a random machine-specific key (e.g., from a combination of hostname + username + a random salt stored separately). At minimum, document the risk prominently.
 
@@ -40,7 +40,7 @@
 - **Severity**: MINOR
 - **Category**: Security
 - **File(s)**: `internal/auth/credential.go:57-59,67-68,77-78`
-- **Description**: The `ring.Set()`, `ring.Get()`, and `ring.Remove()` calls use the raw `account` name as the keyring item key. If a user picks a name like `"__opencode_usage_test__"` (the test key used in `init()`), it could collide with internal keys.
+- **Description**: The `ring.Set()`, `ring.Get()`, and `ring.Remove()` calls use the raw `account` name as the keyring item key. If a user picks a name like `"__token_usage_test__"` (the test key used in `init()`), it could collide with internal keys.
 - **Impact**: Account name collisions with internal test keys could cause data corruption or unexpected behavior.
 - **Suggested Fix**: Prefix all keyring keys with a namespace, e.g., `"account:" + account`.
 
@@ -112,7 +112,7 @@
 - **Severity**: MAJOR
 - **Category**: Cross-platform
 - **File(s)**: `internal/cmd/root.go:95`, `internal/cmd/current.go:26`, `internal/cmd/quota.go:154`, `internal/cmd/doctor.go:54`
-- **Description**: Path construction uses string concatenation with `/` separators: `homeDir + "/.config/opencode-usage/config.yaml"` and `homeDir + "/.local/share/opencode/auth.json"`. On Windows, `os.UserHomeDir()` returns `C:\Users\<name>`, and the resulting path `C:\Users\<name>/.config/...` contains mixed separators. While Go's `os` package handles mixed separators on Windows, `filepath.Join` is the idiomatic and safe approach.
+- **Description**: Path construction uses string concatenation with `/` separators: `homeDir + "/.config/token-usage/config.yaml"` and `homeDir + "/.local/share/opencode/auth.json"`. On Windows, `os.UserHomeDir()` returns `C:\Users\<name>`, and the resulting path `C:\Users\<name>/.config/...` contains mixed separators. While Go's `os` package handles mixed separators on Windows, `filepath.Join` is the idiomatic and safe approach.
 - **Impact**: Potential path resolution issues on Windows. The paths also assume XDG-like layout which doesn't exist on Windows.
 - **Suggested Fix**: Use `filepath.Join()` for all path construction. For Windows, consider using `%APPDATA%` or `%USERPROFILE%` for config paths.
 
@@ -196,9 +196,9 @@ All three platform builds succeeded:
 
 | Platform | Binary | Status |
 |----------|--------|--------|
-| Linux amd64 | `/tmp/ou-linux` | ✅ |
-| Windows amd64 | `/tmp/ou-windows.exe` | ✅ |
-| macOS arm64 | `/tmp/ou-darwin` | ✅ |
+| Linux amd64 | `/tmp/tu-linux` | ✅ |
+| Windows amd64 | `/tmp/tu-windows.exe` | ✅ |
+| macOS arm64 | `/tmp/tu-darwin` | ✅ |
 
 ---
 

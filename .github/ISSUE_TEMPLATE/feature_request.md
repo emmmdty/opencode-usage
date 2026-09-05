@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Suggest an idea for opencode-usage
+about: Suggest an idea for token-usage
 title: "[FEAT] "
 labels: enhancement
 assignees: ""

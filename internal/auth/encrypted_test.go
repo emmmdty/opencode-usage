@@ -154,8 +154,8 @@ func TestValidateAccountName(t *testing.T) {
 
 func TestStoreAndGetEncrypted(t *testing.T) {
 	// Skip if master password is not available
-	if os.Getenv("OPENCODE_USAGE_MASTER_PASSWORD") == "" {
-		t.Skip("OPENCODE_USAGE_MASTER_PASSWORD not set")
+	if os.Getenv("TOKEN_USAGE_MASTER_PASSWORD") == "" {
+		t.Skip("TOKEN_USAGE_MASTER_PASSWORD not set")
 	}
 
 	// Use an isolated temp path so the real user config is never touched.

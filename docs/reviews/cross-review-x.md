@@ -38,7 +38,7 @@
 ### [CX-4] F04: Exit codes 2-7 — is this a BLOCKER?
 - **Reviewers involved**: E (F04)
 - **Conflict**: Reviewer E classifies as BLOCKER. The code only uses `os.Exit(1)` for all errors.
-- **Code evidence**: `cmd/opencode-usage/main.go:13` — `os.Exit(1)` is the only exit path. README lines 131-140 document exit codes 2-7 with specific meanings. No code in the entire codebase calls `os.Exit(2)` through `os.Exit(7)`. The `SilenceUsage: true` on root command prevents Cobra from exiting with code 2 on usage errors.
+- **Code evidence**: `cmd/token-usage/main.go:13` — `os.Exit(1)` is the only exit path. README lines 131-140 document exit codes 2-7 with specific meanings. No code in the entire codebase calls `os.Exit(2)` through `os.Exit(7)`. The `SilenceUsage: true` on root command prevents Cobra from exiting with code 2 on usage errors.
 - **Resolution**: **Real issue, but BLOCKER is too high.** The documented contract is broken — scripts checking `$? -eq 3` for auth failure will never trigger. However, this is a documentation/feature gap, not a crash or data loss. Users who don't rely on specific exit codes are unaffected. The tool works correctly; it just doesn't distinguish error types via exit codes. MAJOR is the correct severity — it's a missing feature that contradicts documentation.
 - **Corrected severity**: MAJOR (not BLOCKER)
 
@@ -80,7 +80,7 @@
   passwordOnce.Do(doInitMasterPassword)
   ```
   When `useMasterPassword` is explicitly set to `false`, line 83 writes `cachedMasterPassword = defaultPassword` without synchronization. Multiple goroutines in `quota.go:96-117` call `auth.GetAPIKey` concurrently, which calls `getMasterPassword`. Two goroutines can both pass the line 78 check (both see empty string), both enter the line 82 path, and both write to `cachedMasterPassword` simultaneously.
-- **Resolution**: **Real race, but low practical impact.** The race exists in the Go memory model sense — two goroutines writing to the same string variable without synchronization is undefined behavior. The race detector would flag this. However, both goroutines write the same value (`"opencode-usage-default"`), so in practice on amd64 the corruption window is tiny and the value is always the same. The main risk is the race detector flagging it in tests, which would make `-race` builds fail. MAJOR is correct for a library that claims to be safe for concurrent use.
+- **Resolution**: **Real race, but low practical impact.** The race exists in the Go memory model sense — two goroutines writing to the same string variable without synchronization is undefined behavior. The race detector would flag this. However, both goroutines write the same value (`"token-usage-default"`), so in practice on amd64 the corruption window is tiny and the value is always the same. The main risk is the race detector flagging it in tests, which would make `-race` builds fail. MAJOR is correct for a library that claims to be safe for concurrent use.
 - **Corrected severity**: MAJOR (confirmed)
 
 ---
@@ -132,8 +132,8 @@
 
 ### [CX-13] SEC-001: Hardcoded default password — overlap with CC-01?
 - **Reviewers involved**: A (CC-01), F (SEC-001)
-- **Conflict**: SEC-001 flags the hardcoded default password `"opencode-usage-default"` as a MAJOR security issue. CC-01 uses the same variable but focuses on the race condition. Different issues.
-- **Code evidence**: `internal/auth/encrypted.go:27` — `const defaultPassword = "opencode-usage-default"`. This is the encryption key used when master password mode is disabled. Anyone with the source code or binary can decrypt the secrets file.
+- **Conflict**: SEC-001 flags the hardcoded default password `"token-usage-default"` as a MAJOR security issue. CC-01 uses the same variable but focuses on the race condition. Different issues.
+- **Code evidence**: `internal/auth/encrypted.go:27` — `const defaultPassword = "token-usage-default"`. This is the encryption key used when master password mode is disabled. Anyone with the source code or binary can decrypt the secrets file.
 - **Resolution**: **Distinct issues.** SEC-001 is about weak default encryption. CC-001 is about concurrent access. SEC-001 is a real security concern but the severity depends on threat model: the encrypted file is only used when the keyring is unavailable, and the file is stored with 0600 permissions. If an attacker has file access, they likely also have the binary. MAJOR is appropriate.
 - **Corrected severity**: MAJOR (confirmed)
 

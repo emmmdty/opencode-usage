@@ -9,11 +9,11 @@ import (
 )
 
 func TestCLIIntegration(t *testing.T) {
-	binary := filepath.Join(t.TempDir(), "opencode-usage-test")
+	binary := filepath.Join(t.TempDir(), "token-usage-test")
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
-	buildCmd := exec.Command("go", "build", "-o", binary, "../cmd/opencode-usage/")
+	buildCmd := exec.Command("go", "build", "-o", binary, "../cmd/token-usage/")
 	if err := buildCmd.Run(); err != nil {
 		t.Fatalf("failed to build binary: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestCLIIntegration(t *testing.T) {
 		t.Fatalf("failed to run help command: %v", err)
 	}
 
-	if !strings.Contains(string(output), "OpenCode Go") {
-		t.Error("help output should contain 'OpenCode Go'")
+	if !strings.Contains(string(output), "Token Usage") {
+		t.Error("help output should contain 'Token Usage'")
 	}
 }
