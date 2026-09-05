@@ -396,7 +396,7 @@ func configureAuthFromConfig(cfg *config.Config) {
 	auth.SetUseMasterPassword(cfg.UseMasterPassword)
 }
 
-func getConfigPath() (string, error) {
+var getConfigPath = func() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
