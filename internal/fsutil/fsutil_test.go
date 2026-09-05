@@ -3,6 +3,7 @@ package fsutil
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -19,12 +20,16 @@ func TestWriteFileAtomic(t *testing.T) {
 		t.Fatalf("content mismatch: %q err=%v", data, err)
 	}
 
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("stat failed: %v", err)
-	}
-	if got := info.Mode().Perm(); got != 0600 {
-		t.Errorf("perm = %v, want 0600", got)
+	// Permission bits are a POSIX concept; Windows only maps the
+	// read-only flag, so the 0600 assertion is not applicable there.
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat failed: %v", err)
+		}
+		if got := info.Mode().Perm(); got != 0600 {
+			t.Errorf("perm = %v, want 0600", got)
+		}
 	}
 
 	// No temp leftovers in the target directory.
