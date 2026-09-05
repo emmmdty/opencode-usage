@@ -92,7 +92,7 @@ func TestVolcengineArkcliParsing(t *testing.T) {
 		t.Skip("fake arkcli requires a POSIX shell; arkcli parsing is covered by the JSON structure on Windows")
 	}
 	script := `#!/bin/sh
-echo '{"items":[{"product":"coding-plan","edition":"personal","subscribed":true,"periods":[{"label":"session","percent":42,"reset_at":"2026-09-05T20:00:00+08:00"},{"label":"weekly","percent":10,"reset_at":"2026-09-08T00:00:00+08:00"},{"label":"monthly","percent":5,"reset_at":"2026-09-29T00:00:00+08:00"}]},{"product":"agent-plan","subscribed":false,"periods":[]}]}'
+echo '{"items":[{"product":"coding-plan","edition":"personal","subscribed":true,"periods":[{"label":"session","percent":42.5,"reset_at":"2026-09-05T20:00:00+08:00"},{"label":"weekly","percent":10.42,"reset_at":"2026-09-08T00:00:00+08:00"},{"label":"monthly","percent":5.21,"reset_at":"2026-09-29T00:00:00+08:00"}]},{"product":"agent-plan","subscribed":false,"periods":[]}]}'
 `
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "arkcli")
@@ -108,7 +108,7 @@ echo '{"items":[{"product":"coding-plan","edition":"personal","subscribed":true,
 	if usage.PlanType != "coding-plan (personal)" {
 		t.Errorf("unexpected plan type %q", usage.PlanType)
 	}
-	if usage.Rolling.Percent != 42 || usage.Weekly.Percent != 10 || usage.Monthly.Percent != 5 {
+	if usage.Rolling.Percent != 43 || usage.Weekly.Percent != 10 || usage.Monthly.Percent != 5 {
 		t.Errorf("unexpected windows: %+v", usage)
 	}
 }

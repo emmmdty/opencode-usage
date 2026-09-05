@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -60,34 +61,43 @@ func (p *VolcengineProvider) IsAvailable() bool {
 }
 
 func (p *VolcengineProvider) GetUsage() (*Usage, error) {
+	var arkErr error
 	if p.arkcli != "" {
 		usage, err := p.usageViaArkcli()
 		if err == nil {
 			return usage, nil
 		}
+		arkErr = err
 		// Fall through to the probe when a key is available; otherwise
 		// surface the arkcli error (e.g. not logged in).
 		if p.apiKey == "" {
 			return nil, fmt.Errorf("arkcli: %w", err)
 		}
 	}
-	return p.usageViaProbe()
+	usage, err := p.usageViaProbe()
+	if err == nil && arkErr != nil {
+		// Make the silent fallback diagnosable instead of hiding it.
+		usage.Note = fmt.Sprintf("arkcli query failed (%s); %s", truncateMsg(arkErr.Error(), 100), usage.Note)
+	}
+	return usage, err
 }
 
-// arkcliEnv suppresses update checks and follows the official caller
-// attribution protocol for AI agents.
+// arkcliEnv appends the update-suppression and caller-attribution variables
+// to the inherited environment. Replacing os.Environ() entirely would break
+// the arkcli wrapper (its node shebang needs PATH) and the CLI itself
+// (it resolves its login state under $HOME).
 func arkcliEnv() []string {
-	return []string{
+	return append(os.Environ(),
 		"ARKCLI_NO_UPDATE_NOTIFIER=1",
 		"ARKCLI_CALLER_TYPE=ai_agent",
 		"ARKCLI_CALLER_NAME=token-usage",
-	}
+	)
 }
 
 type arkcliPeriod struct {
-	Label   string `json:"label"`
-	Percent int    `json:"percent"`
-	ResetAt string `json:"reset_at"`
+	Label   string  `json:"label"`
+	Percent float64 `json:"percent"`
+	ResetAt string  `json:"reset_at"`
 }
 
 type arkcliItem struct {
@@ -173,7 +183,7 @@ func (p *VolcengineProvider) usageViaArkcli() (*Usage, error) {
 
 	// Label mapping: coding plan uses "session", agent plan uses "5h".
 	for _, period := range best.Periods {
-		window := QuotaWindow{Status: "ok", Percent: period.Percent}
+		window := QuotaWindow{Status: "ok", Percent: int(period.Percent + 0.5)}
 		if t, err := time.Parse(time.RFC3339, period.ResetAt); err == nil {
 			window.ResetAt = t
 		}
