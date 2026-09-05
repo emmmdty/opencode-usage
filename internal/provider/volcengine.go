@@ -102,6 +102,26 @@ type arkcliOutput struct {
 	Items []arkcliItem `json:"items"`
 }
 
+// pickArkcliItem selects the first subscribed item for a product, preferring
+// personal edition over team seats.
+func pickArkcliItem(out arkcliOutput, product string) *arkcliItem {
+	var best *arkcliItem
+	for i := range out.Items {
+		item := &out.Items[i]
+		if !item.Subscribed {
+			continue
+		}
+		if item.Product != product && item.Product != product+"-team" {
+			continue
+		}
+		if best != nil && best.Product == product && item.Product != product {
+			continue // keep personal over team
+		}
+		best = item
+	}
+	return best
+}
+
 // usageViaArkcli shells out to the official CLI. Read-only query; the local
 // side effects are arkcli's own caches under ~/.arkcli.
 func (p *VolcengineProvider) usageViaArkcli() (*Usage, error) {
@@ -141,20 +161,7 @@ func (p *VolcengineProvider) usageViaArkcli() (*Usage, error) {
 	if p.plan == PlanCoding {
 		wantPersonal = "coding-plan"
 	}
-	var best *arkcliItem
-	for i := range out.Items {
-		item := &out.Items[i]
-		if !item.Subscribed {
-			continue
-		}
-		if item.Product != wantPersonal && item.Product != wantPersonal+"-team" {
-			continue
-		}
-		if best != nil && best.Product == wantPersonal && item.Product != wantPersonal {
-			continue // keep personal over team
-		}
-		best = item
-	}
+	best := pickArkcliItem(out, wantPersonal)
 	if best == nil {
 		return nil, fmt.Errorf("no active %s subscription found (run 'arkcli usage plan' to check)", wantPersonal)
 	}

@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -87,18 +88,15 @@ func TestVolcengineIsAvailable(t *testing.T) {
 }
 
 func TestVolcengineArkcliParsing(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake arkcli requires a POSIX shell; arkcli parsing is covered by the JSON structure on Windows")
+	}
 	script := `#!/bin/sh
 echo '{"items":[{"product":"coding-plan","edition":"personal","subscribed":true,"periods":[{"label":"session","percent":42,"reset_at":"2026-09-05T20:00:00+08:00"},{"label":"weekly","percent":10,"reset_at":"2026-09-08T00:00:00+08:00"},{"label":"monthly","percent":5,"reset_at":"2026-09-29T00:00:00+08:00"}]},{"product":"agent-plan","subscribed":false,"periods":[]}]}'
 `
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "arkcli")
-	if err := exec.Command("cp", "/bin/sh", bin).Run(); err != nil {
-		t.Skipf("cannot prepare fake arkcli: %v", err)
-	}
-	if err := exec.Command("chmod", "+x", bin).Run(); err != nil {
-		t.Skipf("cannot chmod fake arkcli: %v", err)
-	}
-	if err := writeFakeArkcli(bin, script); err != nil {
+	if err := os.WriteFile(bin, []byte(script), 0755); err != nil {
 		t.Fatalf("failed to write fake arkcli: %v", err)
 	}
 
@@ -115,6 +113,25 @@ echo '{"items":[{"product":"coding-plan","edition":"personal","subscribed":true,
 	}
 }
 
-func writeFakeArkcli(path, script string) error {
-	return exec.Command("/bin/sh", "-c", "cat > "+path+" <<'EOF'\n"+script+"EOF\nchmod +x "+path).Run()
+func TestArkcliOutputParsing(t *testing.T) {
+	// Platform-independent: parse the arkcli JSON shape directly.
+	out := arkcliOutput{
+		Items: []arkcliItem{
+			{Product: "coding-plan", Edition: "team", Subscribed: true, Periods: []arkcliPeriod{
+				{Label: "session", Percent: 7},
+			}},
+			{Product: "coding-plan", Edition: "personal", Subscribed: true, Periods: []arkcliPeriod{
+				{Label: "session", Percent: 42},
+				{Label: "weekly", Percent: 10},
+			}},
+			{Product: "agent-plan", Subscribed: false},
+		},
+	}
+	best := pickArkcliItem(out, "coding-plan")
+	if best == nil || best.Edition != "personal" {
+		t.Fatalf("expected personal coding-plan item to win, got %+v", best)
+	}
+	if pickArkcliItem(out, "agent-plan") != nil {
+		t.Error("unsubscribed agent-plan must be skipped")
+	}
 }
