@@ -1,6 +1,7 @@
 package test
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -19,6 +20,7 @@ func TestCLIIntegration(t *testing.T) {
 	}
 
 	helpCmd := exec.Command(binary, "--help")
+	helpCmd.Env = append(os.Environ(), "LANG=en_US.UTF-8")
 	output, err := helpCmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to run help command: %v", err)

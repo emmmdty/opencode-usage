@@ -15,7 +15,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/emmmdty/token-usage/internal/auth"
 	"github.com/emmmdty/token-usage/internal/config"
-	"github.com/emmmdty/token-usage/internal/i18n"
 	"github.com/emmmdty/token-usage/internal/tui"
 	"github.com/emmmdty/token-usage/internal/version"
 	"github.com/muesli/termenv"
@@ -43,16 +42,6 @@ openai-compatible).`,
 	Version: version.Version,
 	Args:    cobra.MaximumNArgs(1),
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		// Resolve language: flag > env > config > system LANG > default "en"
-		configLang := ""
-		if cfgPath, err := getConfigPath(); err == nil {
-			if cfg, err := config.LoadOrCreateConfig(cfgPath); err == nil {
-				configLang = cfg.Language
-			}
-		}
-		resolvedLang := i18n.DetectLanguage(langFlag, os.Getenv("TOKEN_USAGE_LANG"), configLang, os.Getenv("LANG"))
-		i18n.SetLanguage(resolvedLang)
-
 		if noColor || os.Getenv("NO_COLOR") != "" {
 			lipgloss.SetColorProfile(termenv.Ascii)
 			tui.DisableColor()
@@ -74,6 +63,8 @@ openai-compatible).`,
 }
 
 func Execute() error {
+	// Resolve language before cobra runs (needed for --help which skips PersistentPreRun)
+	resolveLanguage()
 	return rootCmd.Execute()
 }
 
