@@ -34,7 +34,19 @@ var quotaCmd = &cobra.Command{
 	Use:     "quota [account]",
 	Aliases: []string{"q"},
 	Short:   "View quota usage for all configured accounts",
-	Args:    cobra.MaximumNArgs(1),
+	Long: `View quota usage for every enabled provider account.
+
+Accepts an optional filter, in any of these forms:
+  token-usage quota                    # everything
+  token-usage quota <account>          # unique bare account name
+  token-usage quota <provider>         # whole provider (e.g. volcengine)
+  token-usage quota <provider>/<account>
+The -n/--account global flag accepts the same forms.
+
+Windows that a provider cannot resolve are shown as n/a; probe-only
+providers (e.g. Volcano without arkcli) print a note under their row.
+Use --json for machine-readable output.`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		accountFilter := account
 		if len(args) > 0 {

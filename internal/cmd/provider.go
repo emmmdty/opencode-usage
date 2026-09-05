@@ -31,12 +31,26 @@ var providerCmd = &cobra.Command{
 	Use:     "provider",
 	Aliases: []string{"pr"},
 	Short:   "Manage providers",
+	Long: `Manage providers and their account lists.
+
+Built-in presets (opencode, claude, codex, volcengine) ship enabled with a
+local account where applicable. Custom providers wrap one of the built-in
+query implementations (zai-glm, kimi, minimax, deepseek, openai-compatible)
+with your own base URL and API key, and are only saved after a live quota
+query succeeds.
+
+Run 'token-usage provider add' to register a new provider.`,
 }
 
 var providerListCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"ls"},
 	Short:   "List configured providers",
+	Long: `List configured providers with account counts and status.
+
+Shows, for every preset and custom provider: display name, enabled state,
+number of accounts, the current account marker (->), and per-account
+details (credential source, masked key id, plan).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfgPath, err := getConfigPath()
 		if err != nil {
@@ -167,7 +181,18 @@ Custom:  provider add custom --name <id> --query-type <zai-glm|kimi|minimax|deep
          --base-url <url> --key <api-key>
 
 Preset providers detect local logins (Claude Code, Codex, opencode.json) and
-offer to reuse them without modifying those files.`,
+offer to reuse them without modifying those files. The Volcano Engine preset
+reads its API key from ~/.config/opencode/opencode.json automatically.
+
+Custom providers are validated with a live quota query before being saved:
+if the query fails (bad key, unreachable URL, no quota endpoint) nothing is
+written and the reason is printed.
+
+Examples:
+  token-usage provider add                        # interactive menu
+  token-usage provider add volcengine --plan coding --use-local
+  token-usage provider add custom --name my-glm --query-type zai-glm \
+      --base-url https://api.z.ai --key <api-key>`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		providerType := addProviderType
@@ -515,7 +540,12 @@ var providerRemoveCmd = &cobra.Command{
 	Use:     "remove <provider>",
 	Aliases: []string{"rm"},
 	Short:   "Remove a custom provider or disable a preset",
-	Args:    cobra.ExactArgs(1),
+	Long: `Remove a provider.
+
+For custom providers this deletes the provider, all of its accounts, and
+their stored API keys. Built-in presets are only disabled (their accounts
+are kept); re-enable with 'token-usage provider enable <provider>'.`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
 		cfgPath, err := getConfigPath()
@@ -552,20 +582,22 @@ var providerRemoveCmd = &cobra.Command{
 }
 
 var providerEnableCmd = &cobra.Command{
-	Use:       "enable <provider>",
-	Short:     "Enable a provider",
-	ValidArgs: []string{"opencode", "claude", "codex", "volcengine"},
-	Args:      cobra.ExactArgs(1),
+	Use:   "enable <provider>",
+	Short: "Enable a provider",
+	Long: `Enable a provider (preset or custom). Disabled providers are skipped
+by quota/provider views and 'provider add' can also enable a preset.`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return setProviderEnabled(args[0], true)
 	},
 }
 
 var providerDisableCmd = &cobra.Command{
-	Use:       "disable <provider>",
-	Short:     "Disable a provider",
-	ValidArgs: []string{"opencode", "claude", "codex", "volcengine"},
-	Args:      cobra.ExactArgs(1),
+	Use:   "disable <provider>",
+	Short: "Disable a provider",
+	Long: `Disable a provider (preset or custom) without deleting its accounts.
+Queries skip disabled providers until re-enabled.`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return setProviderEnabled(args[0], false)
 	},

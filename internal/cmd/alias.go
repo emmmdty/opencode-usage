@@ -17,6 +17,11 @@ var aliasCmd = &cobra.Command{
 var aliasInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install shell alias",
+	Long: `Install the 'tu' shell alias for token-usage.
+
+Detects your shell from $SHELL: zsh writes to ~/.zshrc, anything else to
+~/.bashrc. Re-running replaces an existing 'tu' alias after confirmation.
+Restart your terminal or re-source the rc file afterwards.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
@@ -67,6 +72,10 @@ var aliasInstallCmd = &cobra.Command{
 var aliasUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "Uninstall shell alias",
+	Long: `Remove the 'tu' shell alias (and its marker comment) from your rc file.
+
+Detects your shell from $SHELL: zsh writes to ~/.zshrc, anything else to
+~/.bashrc. Does nothing when the alias is not present.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {

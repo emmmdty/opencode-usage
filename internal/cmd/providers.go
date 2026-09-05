@@ -12,7 +12,14 @@ var providersCmd = &cobra.Command{
 	Use:     "providers [provider]",
 	Aliases: []string{"p"},
 	Short:   "View usage grouped by provider (OpenCode, Claude, Codex, Volcano Engine, custom)",
-	Args:    cobra.MaximumNArgs(1),
+	Long: `View usage across providers; this is the default view when running
+'token-usage' with no subcommand.
+
+Accepts an optional provider filter (e.g. 'token-usage providers volcengine').
+Every enabled account of every provider is queried concurrently; unknown
+windows render as n/a with provider notes underneath. Use --json for
+machine-readable output.`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		providerFilter := ""
 		if len(args) > 0 {

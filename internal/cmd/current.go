@@ -25,6 +25,12 @@ var currentCmd = &cobra.Command{
 	Use:     "current",
 	Aliases: []string{"cc"},
 	Short:   "Show current opencode configuration",
+	Long: `Show the providers configured in opencode's own auth.json
+(~/.local/share/opencode/auth.json).
+
+The arrow (->) marks the active opencode-go entry; when its key matches a
+token-usage account, the matching provider/account is printed as well.
+Use 'token-usage account switch opencode' to change it.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {

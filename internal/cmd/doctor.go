@@ -33,6 +33,11 @@ func countProviders(cfg *config.Config) int {
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Diagnose configuration and connectivity issues",
+	Long: `Diagnose configuration and connectivity issues.
+
+Checks: config file readability, account/provider counts, credential store
+(keyring or encrypted fallback), arkcli availability (full Volcano Engine
+quota windows), network reachability, and opencode's auth.json presence.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		theme := newDoctorTheme()
 		checks := []doctorCheck{}

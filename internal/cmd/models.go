@@ -14,6 +14,10 @@ var modelsCmd = &cobra.Command{
 	Use:     "models [account]",
 	Aliases: []string{"m"},
 	Short:   "List available models (opencode provider)",
+	Long: `List the models available for an OpenCode Go plan.
+
+The optional argument is an opencode account name (or provider/account);
+it defaults to the alphabetically first opencode account.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		accountName := account
 		if len(args) > 0 {

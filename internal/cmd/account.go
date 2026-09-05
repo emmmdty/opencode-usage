@@ -23,6 +23,14 @@ var accountCmd = &cobra.Command{
 	Use:     "account",
 	Aliases: []string{"a"},
 	Short:   "Manage accounts per provider",
+	Long: `Manage accounts within providers.
+
+Every account belongs to a provider (e.g. opencode/work, claude/local).
+Accounts with source "manual" keep their API key in the credential store;
+accounts with source "local" are read from the tool's own login files
+(Claude Code, Codex) or from opencode.json (Volcano Engine) at query time.
+
+Run 'token-usage account add' to register a new account.`,
 }
 
 var (
@@ -38,7 +46,12 @@ var accountAddCmd = &cobra.Command{
 	Long: `Add an account to a provider.
 
 Presets (claude, codex, volcengine) detect local logins and offer to reuse
-them without touching those files. With no arguments this is interactive.`,
+them without touching those files. With no arguments this is interactive.
+
+Non-interactive examples:
+  token-usage account add opencode work --key sk-...
+  token-usage account add volcengine --plan coding --use-local
+  token-usage account add my-glm main --key zai-...   # custom provider`,
 	Args: cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		providerID := acctProvider
@@ -168,6 +181,11 @@ var accountListCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"al"},
 	Short:   "List accounts grouped by provider",
+	Long: `List accounts grouped by provider.
+
+Each line shows provider/account, credential source, masked key id (manual
+accounts only), verification status, and the last verified time. The arrow
+(->) marks the provider's current account. Filter with --provider.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfgPath, err := getConfigPath()
 		if err != nil {
@@ -263,7 +281,16 @@ var accountRemoveCmd = &cobra.Command{
 	Use:     "remove <provider> <account>",
 	Aliases: []string{"ar"},
 	Short:   "Remove an account",
-	Args:    cobra.MaximumNArgs(2),
+	Long: `Remove an account and its stored API key.
+
+Accepted argument forms:
+  token-usage account remove <provider> <account>
+  token-usage account remove <provider>/<account>
+  token-usage account remove <account>       # only when the name is unique
+
+For custom providers with a single account this leaves the provider
+defined but empty; use 'token-usage provider remove' to delete it fully.`,
+	Args: cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfgPath, err := getConfigPath()
 		if err != nil {
@@ -353,10 +380,16 @@ var accountSwitchCmd = &cobra.Command{
 	Short:   "Mark an account as current",
 	Long: `Mark an account as the current one for its provider.
 
+Accepted argument forms (interactive picker when omitted):
+  token-usage account switch                        # pick provider + account
+  token-usage account switch <provider>             # pick account of provider
+  token-usage account switch <provider> <account>
+  token-usage account switch <provider>/<account>
+
 For the opencode provider this also writes the key into opencode's own
 auth.json (the classic switch), so the change applies to opencode after
 running /connect there. Other providers only record the current marker used
-  by 'quota' and 'providers' output.`,
+by 'quota' and 'providers' output.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfgPath, err := getConfigPath()
 		if err != nil {
@@ -454,7 +487,15 @@ var accountTestCmd = &cobra.Command{
 	Use:     "test [provider] [account]",
 	Aliases: []string{"t"},
 	Short:   "Validate that quota querying works for an account",
-	Args:    cobra.MaximumNArgs(2),
+	Long: `Validate that quota querying works for an account.
+
+Performs one live quota query and prints the resolved windows plus any
+provider note (e.g. arkcli hints). On success the account's last-verified
+timestamp is refreshed.
+
+Accepted argument forms are the same as 'account remove' (pair, slash form,
+or unique bare account name).`,
+	Args: cobra.MaximumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfgPath, err := getConfigPath()
 		if err != nil {
@@ -526,6 +567,10 @@ var accountExportCmd = &cobra.Command{
 	Use:     "export",
 	Aliases: []string{"ae"},
 	Short:   "Export account metadata (no secrets)",
+	Long: `Export account metadata as JSON.
+
+The output contains provider id, account name, and masked key id only —
+API keys are never written. Use with --output to write to a file.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfgPath, err := getConfigPath()
 		if err != nil {
@@ -569,7 +614,19 @@ var accountImportCmd = &cobra.Command{
 	Use:     "import <file>",
 	Aliases: []string{"ai"},
 	Short:   "Import accounts from a JSON file",
-	Args:    cobra.ExactArgs(1),
+	Long: `Import accounts from a JSON file.
+
+Expected format (api_key is required, provider defaults to opencode):
+  {
+    "accounts": [
+      {"provider": "opencode", "name": "work", "api_key": "sk-..."},
+      {"name": "legacy", "api_key": "sk-..."}
+    ]
+  }
+
+Entries with missing names/keys, unknown providers, or duplicate accounts
+are skipped with a reason; keys are stored before the config is updated.`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		data, err := os.ReadFile(args[0])
 		if err != nil {

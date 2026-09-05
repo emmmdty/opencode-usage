@@ -92,6 +92,12 @@ type githubRelease struct {
 var updateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Check for and install updates",
+	Long: `Check GitHub Releases for a newer version and self-update.
+
+When a newer release exists, the matching platform binary is downloaded
+from GitHub Releases and replaces the running executable. Downgrades are
+skipped. If the GitHub API rate limit is hit, install the gh CLI, set
+GITHUB_TOKEN, or wait for the limit to reset.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Current version: %s\n", version.Version)
 		fmt.Println("Checking for updates...")
@@ -366,7 +372,7 @@ func downloadBinary(url string) (string, error) {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&jsonOutput, "json", "j", false, "JSON output")
-	rootCmd.PersistentFlags().StringVarP(&account, "account", "n", "", "specify account")
+	rootCmd.PersistentFlags().StringVarP(&account, "account", "n", "", "account or provider/account to query")
 	rootCmd.PersistentFlags().StringVarP(&outputFile, "output", "o", "", "output to file")
 	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable color output")
 	rootCmd.AddCommand(versionCmd)
